@@ -28,6 +28,9 @@ export function Modal({
   return (
     <div
       className={cx('scrim', open && 'open')}
+      // kept in the DOM for the fade transition; inert removes it from focus order and
+      // the accessibility tree while closed
+      inert={!open}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}

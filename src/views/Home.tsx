@@ -8,7 +8,7 @@ import './home.css'
 
 export default function Home() {
   const send = useChat((s) => s.send)
-  const streaming = useChat((s) => s.streaming)
+  const streaming = useChat((s) => !!s.streamingByThread[s.activeId])
   const mode = useSettings((s) => s.mode)
   const [ask, setAsk] = useState('')
 
@@ -49,7 +49,9 @@ export default function Home() {
       cx += (tx - cx) * 0.05
       cy += (ty - cy) * 0.05
       if (parallax.current) {
-        parallax.current.style.transform = `translate(${cx.toFixed(2)}px, ${cy.toFixed(2)}px)`
+        parallax.current.style.transform = useSettings.getState().reducedMotion
+          ? 'none'
+          : `translate(${cx.toFixed(2)}px, ${cy.toFixed(2)}px)`
       }
       if (hovering.current) placeCaption()
       raf = requestAnimationFrame(loop)

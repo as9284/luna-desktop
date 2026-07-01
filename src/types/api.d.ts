@@ -38,10 +38,12 @@ declare global {
     hasKey: (provider: string) => Promise<boolean>
     clearKey: (provider: string) => Promise<boolean>
     chat: (
-      req: { messages: ChatMessage[]; temperature?: number },
+      req: { id?: string; messages: ChatMessage[]; temperature?: number },
       onChunk: (token: string) => void,
       onStatus?: (status: string | null) => void,
     ) => Promise<void>
+    cancelChat: (id: string) => void
+    onOrbitCall: (handler: (name: string, args: string) => string) => () => void
     summarizeMeeting: (title: string, notes: string[]) => Promise<MeetingArtifacts>
     updates: UpdatesApi
   }

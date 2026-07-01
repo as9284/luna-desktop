@@ -351,3 +351,8 @@ body {
     animation: none !important;
   }
 }
+/* the in-app "Reduce motion" setting mirrors the OS media query */
+.reduced-motion * {
+  animation: none !important;
+  transition: none !important;
+}

@@ -84,6 +84,32 @@
   stroke-width: 1.5;
   fill: none;
 }
+.rail-search {
+  padding: 0 12px 4px;
+}
+.rail-search input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.16s, background 0.16s;
+}
+.rail-search input::placeholder {
+  color: var(--ink-3);
+}
+.rail-search input:focus {
+  border-color: rgba(206, 219, 255, 0.35);
+  background: rgba(255, 255, 255, 0.06);
+}
+.rail-empty {
+  padding: 10px 8px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
 .groups {
   overflow: auto;
   padding: 4px 10px 16px;
@@ -283,14 +309,6 @@
   margin: 0 auto;
   padding: 8px 28px 22px;
 }
-.composer-hint {
-  font-family: var(--f-mono);
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  padding: 0 6px 8px;
-}
 .dock--chat {
   position: static;
   transform: none;
@@ -352,9 +370,204 @@
   font-size: 14px;
   color: var(--ink-2);
 }
-.voice p,
 .turn--user .bubble {
   white-space: pre-wrap;
+}
+
+/* ---------- markdown in Luna's messages ---------- */
+.md {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  font-family: var(--f-disp);
+  font-weight: 500;
+  color: var(--ink);
+  line-height: 1.35;
+  margin-top: 6px;
+}
+.md h1 {
+  font-size: 19px;
+}
+.md h2 {
+  font-size: 17px;
+}
+.md h3,
+.md h4 {
+  font-size: 15.5px;
+}
+.md ul,
+.md ol {
+  /* Tailwind preflight resets list-style: none — restore markers in markdown */
+  list-style: revert;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.md li > ul,
+.md li > ol {
+  margin-top: 5px;
+}
+.md a {
+  color: #cfd9f5;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(206, 219, 255, 0.4);
+}
+.md a:hover {
+  text-decoration-color: rgba(206, 219, 255, 0.9);
+}
+.md blockquote {
+  border-left: 2px solid rgba(206, 219, 255, 0.3);
+  padding-left: 14px;
+  color: var(--ink-2);
+}
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.md table {
+  border-collapse: collapse;
+  font-size: 13.5px;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.md th,
+.md td {
+  border: 1px solid var(--line);
+  padding: 6px 12px;
+  text-align: left;
+}
+.md th {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: rgba(255, 255, 255, 0.03);
+}
+.md :not(pre) > code {
+  font-family: var(--f-mono);
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.07);
+  padding: 1px 6px;
+  border-radius: 5px;
+  color: var(--ink);
+}
+
+/* fenced code blocks */
+.codeblock {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.35);
+}
+.codeblock-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 6px 5px 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+.codeblock-lang {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.codeblock pre {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: var(--f-mono);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.codeblock pre code {
+  background: transparent;
+  padding: 0;
+  display: block;
+}
+.codeblock pre::-webkit-scrollbar {
+  height: 8px;
+}
+.codeblock pre::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+/* copy buttons (code blocks + whole message) */
+.copybtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  padding: 4px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: 0.16s;
+}
+.copybtn:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.07);
+}
+.copybtn.copied {
+  color: var(--ink);
+}
+.copybtn svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  fill: none;
+}
+.msg-tools {
+  margin-top: 6px;
+  opacity: 0;
+  transition: opacity 0.16s;
+}
+.turn--luna:hover .msg-tools {
+  opacity: 1;
+}
+
+/* rail indicators: live stream / unread response */
+.thread-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 7px;
+  vertical-align: 1px;
+}
+.thread-dot--live {
+  background: #cfd6e6;
+  box-shadow: 0 0 7px 1px rgba(206, 219, 255, 0.7);
+  animation: breathe 1.6s ease-in-out infinite;
+}
+.thread-dot--unread {
+  background: #cfd9f5;
+  box-shadow: 0 0 6px 1px rgba(206, 219, 255, 0.55);
+}
+
+.send--stop svg rect {
+  fill: currentColor;
+  stroke: none;
 }
 .chat-error {
   align-self: center;

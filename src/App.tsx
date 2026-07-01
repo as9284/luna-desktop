@@ -7,8 +7,19 @@ import Settings from './views/Settings'
 import Updater from './components/Updater'
 import { Toaster } from './ui'
 import { goHome } from './lib/router'
+import { executeOrbitTool } from './lib/orbit-tools'
+import { useSettings } from './store/settings'
 
 export default function App() {
+  const reducedMotion = useSettings((s) => s.reducedMotion)
+
+  // Luna's Orbit tools execute here, where the Orbit store lives
+  useEffect(() => window.api?.onOrbitCall?.(executeOrbitTool), [])
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('reduced-motion', reducedMotion)
+  }, [reducedMotion])
+
   // Hide the non-home views before first paint so there's no flash.
   useLayoutEffect(() => {
     for (const id of ['luna', 'module', 'settings']) {

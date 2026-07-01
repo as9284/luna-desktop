@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Starfield from '../components/Starfield'
+import Markdown, { CopyButton } from '../components/Markdown'
 import { goHome } from '../lib/router'
 import { useChat } from '../store/chat'
 import { useSettings } from '../store/settings'
@@ -24,10 +25,12 @@ const XIcon = () => (
 export default function Chat() {
   const threads = useChat((s) => s.threads)
   const activeId = useChat((s) => s.activeId)
-  const streaming = useChat((s) => s.streaming)
-  const status = useChat((s) => s.status)
-  const error = useChat((s) => s.error)
+  const streamingByThread = useChat((s) => s.streamingByThread)
+  const statusByThread = useChat((s) => s.statusByThread)
+  const errorByThread = useChat((s) => s.errorByThread)
+  const unreadIds = useChat((s) => s.unreadIds)
   const send = useChat((s) => s.send)
+  const stop = useChat((s) => s.stop)
   const newThread = useChat((s) => s.newThread)
   const selectThread = useChat((s) => s.selectThread)
   const deleteThread = useChat((s) => s.deleteThread)
@@ -37,18 +40,59 @@ export default function Chat() {
   const messages = active?.messages ?? []
   const sortedThreads = [...threads].sort((a, b) => b.updatedAt - a.updatedAt)
 
+  const streaming = !!streamingByThread[activeId]
+  const status = statusByThread[activeId] ?? null
+  const error = errorByThread[activeId] ?? null
+
   const [input, setInput] = useState('')
+  const [query, setQuery] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const stickToBottom = useRef(true)
 
+  const q = query.trim().toLowerCase()
+  const visibleThreads = q
+    ? sortedThreads.filter(
+        (t) => t.title.toLowerCase().includes(q) || t.messages.some((m) => m.content.toLowerCase().includes(q)),
+      )
+    : sortedThreads
+
+  // follow the stream only while the user is already near the bottom
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    const el = scrollRef.current
+    if (el && stickToBottom.current) el.scrollTop = el.scrollHeight
   }, [messages])
+
+  // jump to the bottom when switching threads
+  useEffect(() => {
+    stickToBottom.current = true
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [activeId])
+
+  // Ctrl/Cmd+N — new conversation, Ctrl/Cmd+K — search (while the chat view is visible)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || document.getElementById('luna')?.hidden) return
+      const k = e.key.toLowerCase()
+      if (k === 'n') {
+        e.preventDefault()
+        newThread()
+      } else if (k === 'k') {
+        e.preventDefault()
+        searchRef.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [newThread])
 
   const submit = () => {
     const t = input.trim()
     if (!t || streaming) return
     setInput('')
+    stickToBottom.current = true
     send(t, { temperature: tempForMode(mode), system: systemPrompt() })
   }
 
@@ -67,18 +111,39 @@ export default function Chat() {
         <aside className="rail">
           <div className="rail-head">
             <h3>Conversations</h3>
-            <button className="newbtn" aria-label="New conversation" onClick={newThread}>
+            <button className="newbtn" aria-label="New conversation (Ctrl+N)" title="New conversation (Ctrl+N)" onClick={newThread}>
               <svg viewBox="0 0 14 14">
                 <path d="M7 3v8M3 7h8" />
               </svg>
             </button>
           </div>
+          <div className="rail-search">
+            <input
+              ref={searchRef}
+              placeholder="Search conversations…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' && query) {
+                  e.stopPropagation()
+                  setQuery('')
+                }
+              }}
+            />
+          </div>
           <div className="groups">
-            <div className="grp-label">Recent</div>
-            {sortedThreads.map((t) => (
+            <div className="grp-label">{q ? 'Results' : 'Recent'}</div>
+            {q && visibleThreads.length === 0 && <div className="rail-empty">No matches</div>}
+            {visibleThreads.map((t) => (
               <div key={t.id} className={'thread' + (t.id === activeId ? ' active' : '')}>
                 <button className="thread-main" onClick={() => selectThread(t.id)}>
-                  <span className="tt">{t.title}</span>
+                  <span className="tt">
+                    {streamingByThread[t.id] && <span className="thread-dot thread-dot--live" title="Responding…" />}
+                    {!streamingByThread[t.id] && unreadIds[t.id] && (
+                      <span className="thread-dot thread-dot--unread" title="New response" />
+                    )}
+                    {t.title}
+                  </span>
                   <span className="tm">{fmtTime(t.updatedAt)}</span>
                 </button>
                 <IconButton label="Delete conversation" className="row-del" onClick={() => setConfirmDelete(t.id)}>
@@ -115,7 +180,14 @@ export default function Chat() {
             </span>
           </div>
 
-          <div className="scroll" ref={scrollRef}>
+          <div
+            className="scroll"
+            ref={scrollRef}
+            onScroll={(e) => {
+              const el = e.currentTarget
+              stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+            }}
+          >
             <div className="thread-col">
               {messages.length === 0 && (
                 <div className="chat-empty">
@@ -134,7 +206,10 @@ export default function Chat() {
                   <div key={m.id} className="turn turn--luna">
                     <span className="av" />
                     <div className="voice">
-                      <p>{m.content}</p>
+                      <Markdown content={m.content} />
+                      <div className="msg-tools">
+                        <CopyButton text={m.content} label="Copy message" />
+                      </div>
                     </div>
                   </div>
                 ),
@@ -160,7 +235,6 @@ export default function Chat() {
           </div>
 
           <div className="composer-wrap">
-            <div className="composer-hint">/ for commands</div>
             <div className="dock dock--chat">
               <span className="lmark" />
               <input
@@ -171,11 +245,19 @@ export default function Chat() {
                   if (e.key === 'Enter') submit()
                 }}
               />
-              <button className="send" aria-label="Send" onClick={submit}>
-                <svg viewBox="0 0 16 16">
-                  <path d="M2 8h11M9 4l4 4-4 4" />
-                </svg>
-              </button>
+              {streaming ? (
+                <button className="send send--stop" aria-label="Stop generating" title="Stop generating" onClick={() => stop(activeId)}>
+                  <svg viewBox="0 0 16 16">
+                    <rect x="4.5" y="4.5" width="7" height="7" rx="1.5" />
+                  </svg>
+                </button>
+              ) : (
+                <button className="send" aria-label="Send" onClick={submit}>
+                  <svg viewBox="0 0 16 16">
+                    <path d="M2 8h11M9 4l4 4-4 4" />
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
         </section>

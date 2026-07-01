@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import path from 'node:path'
 import { registerKeychain } from './ipc/keychain'
 import { registerLuna } from './ipc/luna'
@@ -31,6 +31,12 @@ function createWindow() {
   trackWindowState(win, state)
 
   win.once('ready-to-show', () => win?.show())
+
+  // links (e.g. in chat markdown) open in the system browser, never a new Electron window
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https:') || url.startsWith('http:')) shell.openExternal(url)
+    return { action: 'deny' }
+  })
 
   win.on('maximize', () => win?.webContents.send('win:maximized', true))
   win.on('unmaximize', () => win?.webContents.send('win:maximized', false))

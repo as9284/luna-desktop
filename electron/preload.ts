@@ -19,14 +19,15 @@ contextBridge.exposeInMainWorld('api', {
   summarizeMeeting: (title: string, notes: string[]) => ipcRenderer.invoke('meeting:summarize', { title, notes }),
 
   // streaming chat — onChunk is called per token, onStatus for transient state (e.g.
-  // "Searching the web…", cleared with null); resolves on done, rejects on error
+  // "Searching the web…", cleared with null); resolves on done, rejects on error.
+  // Pass req.id to be able to cancel the request later via cancelChat(id).
   chat: (
-    req: { messages: { role: string; content: string }[]; temperature?: number },
+    req: { id?: string; messages: { role: string; content: string }[]; temperature?: number },
     onChunk: (token: string) => void,
     onStatus?: (status: string | null) => void,
   ) =>
     new Promise<void>((resolve, reject) => {
-      const id = crypto.randomUUID()
+      const id = req.id ?? crypto.randomUUID()
       const chunkCh = `luna:chunk:${id}`
       const statusCh = `luna:status:${id}`
       const doneCh = `luna:done:${id}`
@@ -47,8 +48,27 @@ contextBridge.exposeInMainWorld('api', {
         cleanup()
         reject(new Error(msg))
       })
-      ipcRenderer.send('luna:chat', { id, ...req })
+      ipcRenderer.send('luna:chat', { ...req, id })
     }),
+
+  // abort an in-flight chat request; the stream resolves normally with partial content
+  cancelChat: (id: string) => ipcRenderer.send('luna:cancel', id),
+
+  // Orbit tool calls from Luna: the main process asks the renderer (where the Orbit
+  // store lives) to execute a tool and reply with a JSON result string
+  onOrbitCall: (handler: (name: string, args: string) => string) => {
+    const listener = (_e: unknown, call: { invokeId: string; name: string; args: string }) => {
+      let result: string
+      try {
+        result = handler(call.name, call.args)
+      } catch (err) {
+        result = JSON.stringify({ error: err instanceof Error ? err.message : String(err) })
+      }
+      ipcRenderer.send(`luna:orbit-result:${call.invokeId}`, result)
+    }
+    ipcRenderer.on('luna:orbit-call', listener)
+    return () => ipcRenderer.removeListener('luna:orbit-call', listener)
+  },
 
   // GitHub auto-updates (notify & confirm)
   updates: {
