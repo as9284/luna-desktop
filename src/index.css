@@ -1,0 +1,353 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: #000000;
+  --color-ink: #edeef2;
+  --color-ink-2: #8a8d98;
+  --color-ink-3: #7d808a;
+  --color-danger: #e15a4f;
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+:root {
+  --bg: #000000;
+  --ink: #edeef2;
+  --ink-2: #8a8d98;
+  --ink-3: #7d808a;
+  --line: rgba(255, 255, 255, 0.1);
+  --line-2: rgba(255, 255, 255, 0.055);
+  --line-strong: rgba(255, 255, 255, 0.22);
+  --glass: rgba(255, 255, 255, 0.035);
+  --danger: #e15a4f;
+  --danger-line: rgba(225, 90, 79, 0.5);
+  --danger-soft: rgba(225, 90, 79, 0.14);
+  --f-disp: 'Space Grotesk', system-ui, sans-serif;
+  --f-body: 'Inter', system-ui, sans-serif;
+  --f-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-body);
+  overflow: hidden;
+  /* `antialiased` forces grayscale AA everywhere; on Windows that overrides ClearType's
+     subpixel rendering and makes text look soft/blurry. Let the OS pick. */
+  -webkit-font-smoothing: auto;
+  user-select: none;
+}
+
+/* ---------- app shell ---------- */
+.app {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.viewport {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+}
+.view {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  transition: transform 0.26s cubic-bezier(0.33, 0, 0.2, 1), opacity 0.2s ease;
+  opacity: 1;
+}
+.view[hidden] {
+  display: none !important;
+}
+/* transform + will-change live ONLY on transition classes, so backdrop-filter
+   surfaces are never isolated by a transforming ancestor at rest. The panels that
+   used to flash during the dolly (chat rail, chat header, command dock) are now
+   solid instead of live-blurred, so scaling no longer breaks any blur and the
+   depth-dolly can run symmetrically on both the incoming and outgoing view. */
+.view.out-fwd,
+.view.in-fwd,
+.view.out-back,
+.view.in-back {
+  will-change: transform, opacity;
+}
+.view.out-fwd {
+  transform: scale(1.08);
+  opacity: 0;
+}
+.view.in-fwd {
+  transform: scale(1.04);
+  opacity: 0;
+}
+.view.out-back {
+  transform: scale(0.94);
+  opacity: 0;
+}
+.view.in-back {
+  transform: scale(0.96);
+  opacity: 0;
+}
+
+/* ---------- titlebar ---------- */
+.titlebar {
+  height: 44px;
+  flex: 0 0 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px 0 18px;
+  position: relative;
+  z-index: 40;
+  border-bottom: 1px solid var(--line-2);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.02), transparent);
+  -webkit-app-region: drag;
+}
+.titlebar button,
+.titlebar .ver {
+  -webkit-app-region: no-drag;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+/* ---------- command dock (shared visual) ---------- */
+.dock {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px 11px 18px;
+  border-radius: 16px;
+  /* Solid (not live-blurred) so the depth-dolly transform can't cut its blur out
+     mid-transition — it floats over the starfield, which is what used to flash. */
+  background: rgba(10, 11, 14, 0.92);
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.dock:focus-within {
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(206, 219, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.dock--home {
+  position: absolute;
+  left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: min(560px, 72%);
+}
+.dock .lmark {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: radial-gradient(circle at 36% 30%, #fff, #cfd6e6 55%, #6c7180);
+  box-shadow: 0 0 10px 1px rgba(206, 219, 255, 0.6);
+}
+.dock input {
+  flex: 1;
+  background: none;
+  border: 0;
+  outline: none;
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: 14.5px;
+}
+.dock input::placeholder {
+  color: var(--ink-2);
+}
+.dock .send {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: 0.2s;
+}
+.dock .send:hover {
+  background: #fff;
+  color: #000;
+}
+.dock .send svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  fill: none;
+}
+
+/* ---------- shared back button ---------- */
+.backbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: var(--ink-2);
+  cursor: pointer;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  transition: 0.18s;
+}
+.backbtn:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.05);
+}
+.backbtn svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  fill: none;
+}
+.brand .mark {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 30%, #fff, #cfd6e6 55%, #6c7180);
+  box-shadow: 0 0 10px 1px rgba(206, 219, 255, 0.55);
+}
+.brand .word {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.brand .ver {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 6px;
+  margin-left: 4px;
+}
+.tb-status {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tb-status .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #cfe0ff;
+  box-shadow: 0 0 8px 1px rgba(206, 219, 255, 0.8);
+  animation: breathe 4s ease-in-out infinite;
+}
+.tb-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.tb-right button {
+  width: 34px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  color: var(--ink-2);
+  cursor: pointer;
+  border-radius: 7px;
+  transition: 0.18s;
+}
+.tb-right button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink);
+}
+.tb-right svg {
+  stroke: currentColor;
+  stroke-width: 1.35;
+  fill: none;
+}
+.winctl {
+  display: flex;
+  gap: 2px;
+}
+.winctl svg {
+  width: 13px;
+  height: 13px;
+}
+.tb-settings svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.4;
+}
+.tb-div {
+  width: 1px;
+  height: 16px;
+  background: var(--line);
+  margin: 0 8px;
+}
+
+/* ---------- shared starfield (DOM, used by Chat) ---------- */
+.starfield {
+  position: absolute;
+  inset: -6%;
+  z-index: 0;
+}
+.star {
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+  animation: twinkle var(--tw, 4s) ease-in-out infinite;
+}
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.12);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+  }
+}

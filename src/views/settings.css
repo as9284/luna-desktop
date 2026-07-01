@@ -1,0 +1,61 @@
+.settings-view {
+  background: radial-gradient(70% 50% at 50% -8%, rgba(206, 219, 255, 0.05), transparent 60%), #000;
+}
+.settings-scroll {
+  position: absolute;
+  inset: 0;
+}
+.settings-col {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 40px 32px 90px;
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+}
+.settings-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.settings-head h1 {
+  font-family: var(--f-disp);
+  font-weight: 600;
+  font-size: 24px;
+  color: var(--ink);
+}
+.sec-block {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.sec-block > h2 {
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-2);
+  font-weight: 500;
+}
+.row-inline {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.settings-about {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.settings-about .name {
+  font-family: var(--f-disp);
+  font-size: 16px;
+  color: var(--ink);
+}
+.muted {
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.6;
+}

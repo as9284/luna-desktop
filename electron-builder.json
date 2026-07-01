@@ -1,0 +1,9 @@
+{
+  "appId": "com.as9284.luna",
+  "productName": "Luna",
+  "directories": { "output": "release" },
+  "files": ["dist", "dist-electron"],
+  "win": { "target": "nsis" },
+  "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true },
+  "publish": [{ "provider": "github", "owner": "as9284", "repo": "luna-desktop" }]
+}

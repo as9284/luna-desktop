@@ -1,0 +1,39 @@
+name: Release
+
+# Push a version tag (e.g. v1.2.3) to build the Windows installer and publish a
+# GitHub Release that the in-app auto-updater reads. Create tags with:
+#   npm version patch   (or minor / major)  ->  git push --follow-tags
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # Builds the renderer + main, runs electron-builder, and uploads artifacts
+      # (installer + latest.yml) to a DRAFT GitHub Release for this tag.
+      - name: Build and publish (draft)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run dist -- --publish always
+
+      # Flip the fully-uploaded draft to a public "latest" release so the updater
+      # can see it. Done last to avoid users updating to a half-uploaded release.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit ${{ github.ref_name }} --draft=false --latest
