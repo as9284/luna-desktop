@@ -639,3 +639,70 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+
+/* ---------- Write (writing assistant) ---------- */
+.panel.write {
+  max-width: 980px;
+}
+.write .meeting-warn {
+  margin: 0;
+}
+.write-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.write-panes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  min-height: 0;
+}
+@media (max-width: 860px) {
+  .write-panes {
+    grid-template-columns: 1fr;
+  }
+}
+.write-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.write-pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 26px;
+}
+.write-out-actions {
+  display: flex;
+  gap: 8px;
+}
+.write-in {
+  min-height: 260px;
+  resize: vertical;
+  line-height: 1.6;
+}
+.write-out {
+  min-height: 260px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-y: auto;
+}
+.write-out.empty {
+  color: var(--ink-3);
+}
+.write-foot {
+  display: flex;
+  justify-content: flex-end;
+}

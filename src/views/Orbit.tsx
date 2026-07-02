@@ -6,7 +6,7 @@ import { goHome } from '../lib/router'
 import { Badge, Button, Checkbox, ConfirmModal, IconButton, Input, Modal, Segmented, Slider, Textarea, toast } from '../ui'
 import './orbit.css'
 
-type Tab = 'tasks' | 'notes' | 'projects' | 'meeting'
+type Tab = 'tasks' | 'notes' | 'projects' | 'meeting' | 'write'
 
 const fmt = (ts: number) =>
   new Date(ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -587,6 +587,171 @@ function Meeting() {
   )
 }
 
+type WriteStyle = 'email' | 'formal' | 'casual' | 'proofread'
+
+const WRITE_STYLES: { id: WriteStyle; label: string; noteTitle: string; instruction: string }[] = [
+  {
+    id: 'email',
+    label: 'Email',
+    noteTitle: 'Email draft',
+    instruction:
+      "Turn the text into a complete, well-structured email with an appropriate greeting and sign-off. Put an inferred subject on the first line as 'Subject: …'.",
+  },
+  {
+    id: 'formal',
+    label: 'Formal',
+    noteTitle: 'Formal rewrite',
+    instruction: 'Rewrite in a formal, professional tone suitable for business or official communication. Keep the meaning intact.',
+  },
+  {
+    id: 'casual',
+    label: 'Casual',
+    noteTitle: 'Casual rewrite',
+    instruction: 'Rewrite in a relaxed, friendly, conversational tone. Keep the meaning intact.',
+  },
+  {
+    id: 'proofread',
+    label: 'Proofread',
+    noteTitle: 'Proofread text',
+    instruction:
+      'Fix grammar, spelling, and punctuation only. Do not change the tone, wording, or structure beyond what corrections require.',
+  },
+]
+
+function writeSystemPrompt(style: WriteStyle, custom: string): string {
+  const s = WRITE_STYLES.find((w) => w.id === style)!
+  return [
+    "You are a writing assistant. Rewrite the user's text according to the instructions.",
+    s.instruction,
+    custom.trim() && `Additional instructions: ${custom.trim()}`,
+    'Reply with ONLY the rewritten text — no preamble, no explanations, no code fences.',
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
+function Write() {
+  const addNote = useOrbit((s) => s.addNote)
+  const updateNote = useOrbit((s) => s.updateNote)
+
+  const [style, setStyle] = useState<WriteStyle>('email')
+  const [custom, setCustom] = useState('')
+  const [input, setInput] = useState('')
+  const [output, setOutput] = useState('')
+  const [reqId, setReqId] = useState<string | null>(null)
+  const [hasKey, setHasKey] = useState(true)
+
+  useEffect(() => {
+    window.api?.hasKey('deepseek').then(setHasKey).catch(() => {})
+  }, [])
+
+  const running = !!reqId
+
+  const run = async () => {
+    const api = window.api
+    const text = input.trim()
+    if (!text || running || !api?.chat) return
+    const id = crypto.randomUUID()
+    setReqId(id)
+    setOutput('')
+    try {
+      await api.chat(
+        {
+          id,
+          messages: [
+            { role: 'system', content: writeSystemPrompt(style, custom) },
+            { role: 'user', content: text },
+          ],
+          temperature: 0.3,
+          tools: false,
+        },
+        (token) => setOutput((o) => o + token),
+      )
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Rewrite failed')
+    } finally {
+      setReqId(null)
+    }
+  }
+
+  const copy = () => {
+    navigator.clipboard.writeText(output).then(() => toast('Copied'))
+  }
+
+  const saveNote = () => {
+    const id = addNote()
+    updateNote(id, { title: WRITE_STYLES.find((w) => w.id === style)!.noteTitle, body: output })
+    toast('Saved to notes')
+  }
+
+  return (
+    <div className="panel write">
+      {!hasKey && (
+        <div className="meeting-warn">Add an API key in Settings so Luna can rewrite your text.</div>
+      )}
+
+      <div className="write-controls">
+        <Segmented
+          options={WRITE_STYLES.map(({ id, label }) => ({ id, label }))}
+          value={style}
+          onChange={(id) => setStyle(id as WriteStyle)}
+        />
+        <Input
+          placeholder="Optional instructions — e.g. make it shorter…"
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+          style={{ flex: 1 }}
+        />
+      </div>
+
+      <div className="write-panes">
+        <div className="write-pane">
+          <div className="write-pane-head">
+            <span className="count">Your text</span>
+          </div>
+          <Textarea
+            placeholder="Paste or write the text to improve…"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            className="write-in"
+          />
+        </div>
+
+        <div className="write-pane">
+          <div className="write-pane-head">
+            <span className="count">Rewritten</span>
+            {output && !running && (
+              <div className="write-out-actions">
+                <Button variant="ghost" small onClick={copy}>
+                  Copy
+                </Button>
+                <Button variant="secondary" small onClick={saveNote}>
+                  Save as note
+                </Button>
+              </div>
+            )}
+          </div>
+          <div className={'write-out' + (output ? '' : ' empty')}>
+            {output || (running ? 'Writing…' : 'The rewritten text will appear here.')}
+          </div>
+        </div>
+      </div>
+
+      <div className="write-foot">
+        {running ? (
+          <Button variant="secondary" onClick={() => window.api?.cancelChat?.(reqId!)}>
+            Stop
+          </Button>
+        ) : (
+          <Button variant="primary" onClick={run} disabled={!input.trim()}>
+            Rewrite
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function Orbit() {
   const name = useUI((s) => s.module) ?? 'Orbit'
   const [tab, setTab] = useState<Tab>('tasks')
@@ -610,7 +775,7 @@ export default function Orbit() {
             <span className="orbit-orb" />
             <div className="orbit-id-txt">
               <h1>{name}</h1>
-              <p>tasks · notes · projects · meeting</p>
+              <p>tasks · notes · projects · meeting · write</p>
             </div>
           </div>
 
@@ -620,6 +785,7 @@ export default function Orbit() {
               { id: 'notes', label: 'Notes' },
               { id: 'projects', label: 'Projects' },
               { id: 'meeting', label: 'Meeting' },
+              { id: 'write', label: 'Write' },
             ]}
             value={tab}
             onChange={(id) => setTab(id as Tab)}
@@ -632,6 +798,7 @@ export default function Orbit() {
         {tab === 'notes' && <Notes />}
         {tab === 'projects' && <Projects />}
         {tab === 'meeting' && <Meeting />}
+        {tab === 'write' && <Write />}
       </div>
     </div>
   )

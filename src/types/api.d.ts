@@ -38,7 +38,7 @@ declare global {
     hasKey: (provider: string) => Promise<boolean>
     clearKey: (provider: string) => Promise<boolean>
     chat: (
-      req: { id?: string; messages: ChatMessage[]; temperature?: number },
+      req: { id?: string; messages: ChatMessage[]; temperature?: number; tools?: boolean },
       onChunk: (token: string) => void,
       onStatus?: (status: string | null) => void,
     ) => Promise<void>

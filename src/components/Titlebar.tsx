@@ -13,20 +13,21 @@ export default function Titlebar() {
         ? `${(moduleName ?? '').toLowerCase()} · module`
         : view === 'settings'
           ? 'settings'
-          : 'all systems nominal'
+          : null
 
   return (
     <div className="titlebar">
       <div className="brand">
         <span className="mark" />
         <span className="word">Luna</span>
-        <span className="ver">v0.1</span>
       </div>
 
-      <div className="tb-status">
-        <span className="dot" />
-        {loc}
-      </div>
+      {loc && (
+        <div className="tb-status">
+          <span className="dot" />
+          {loc}
+        </div>
+      )}
 
       <div className="tb-right">
         <button className="tb-settings" aria-label="Settings" onClick={openSettings}>

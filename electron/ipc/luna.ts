@@ -23,6 +23,8 @@ interface ChatRequest {
   id: string
   messages: { role: string; content: string }[]
   temperature?: number
+  /** false disables tool use entirely (e.g. the writing assistant, which must only rewrite) */
+  tools?: boolean
 }
 
 const fn = (name: string, description: string, properties: Record<string, unknown>, required: string[] = []) => ({
@@ -107,7 +109,7 @@ export function registerLuna() {
 
     try {
       for (let round = 1; round <= MAX_ROUNDS; round++) {
-        const withTools = round < MAX_ROUNDS
+        const withTools = req.tools !== false && round < MAX_ROUNDS
         const { content, toolCalls, finishReason } = await streamOnce(convo, key, temperature, withTools, e, chunkCh, signal)
 
         if (finishReason === 'tool_calls' && toolCalls.length) {

@@ -22,7 +22,7 @@ contextBridge.exposeInMainWorld('api', {
   // "Searching the web…", cleared with null); resolves on done, rejects on error.
   // Pass req.id to be able to cancel the request later via cancelChat(id).
   chat: (
-    req: { id?: string; messages: { role: string; content: string }[]; temperature?: number },
+    req: { id?: string; messages: { role: string; content: string }[]; temperature?: number; tools?: boolean },
     onChunk: (token: string) => void,
     onStatus?: (status: string | null) => void,
   ) =>
