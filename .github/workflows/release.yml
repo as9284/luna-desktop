@@ -13,7 +13,9 @@ permissions:
 
 jobs:
   release:
-    runs-on: windows-latest
+    # Pinned to 2022 (VS 2022): the native module (better-sqlite3) compiles via node-gyp,
+    # and windows-latest now ships Visual Studio 18 (2026), which node-gyp can't detect.
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
 
