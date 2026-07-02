@@ -9,12 +9,15 @@ export function Modal({
   title,
   children,
   actions,
+  wide,
 }: {
   open: boolean
   onClose: () => void
   title?: string
   children?: ReactNode
   actions?: ReactNode
+  /** widen for content that needs room (pasting links, reading a synthesis) */
+  wide?: boolean
 }) {
   useEffect(() => {
     if (!open) return
@@ -35,7 +38,7 @@ export function Modal({
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div className="modal" role="dialog" aria-modal="true">
+      <div className={cx('modal', wide && 'modal--wide')} role="dialog" aria-modal="true">
         {title && <h3>{title}</h3>}
         {children}
         {actions && <div className="modal-actions">{actions}</div>}

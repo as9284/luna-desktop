@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { useSettings } from './settings'
 
 export interface Msg {
   id: string
@@ -134,7 +135,8 @@ export const useChat = create<ChatState>()(
             }))
 
           try {
-            await api.chat({ id: requestId, messages: payload, temperature: opts.temperature }, appendToken, (status) =>
+            const research = useSettings.getState().researchShelf
+            await api.chat({ id: requestId, messages: payload, temperature: opts.temperature, research }, appendToken, (status) =>
               set((s) => ({ statusByThread: { ...s.statusByThread, [targetId]: status } })),
             )
           } catch (e) {

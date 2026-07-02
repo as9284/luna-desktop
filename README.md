@@ -4,22 +4,39 @@
 
 Luna Desktop is a local-first Electron app built around a single idea: Luna is the whole
 identity. The home screen is a 2D orbital system you navigate — Luna glows at the center,
-and your workspace orbits as a planet. Everything you do stays on your machine.
+and your modules orbit as planets. Everything you do stays on your machine.
 
 ---
 
-## Features
+## The planets
+
+Three modules orbit Luna, each a full workspace of its own:
 
 - **Luna — AI chat.** Streaming conversations with proactive, keyless web search (no
   third-party search API): Luna searches the live web on its own whenever a question needs
-  current information. Multi-thread history, all stored locally.
-- **Orbit — your workspace.** Tasks, notes, and projects, plus **Meeting Mode**: capture
-  raw notes during a meeting and Luna turns them into a clean summary note, action-item
-  tasks, and a grouping project when you end the session.
-- **Local-first & private.** Conversations, Orbit data, and meeting sessions persist on
-  this device. Your API key is encrypted at rest via the OS keychain (Electron
-  `safeStorage`) — it never touches disk in plaintext or leaves your machine except to call
-  the AI provider directly.
+  current information. Luna can also act on your other modules through tools — creating and
+  updating Orbit tasks/notes/projects, and searching, reading, and saving Atlas articles —
+  directly from chat. Multi-thread history, all stored locally.
+- **Orbit — your workspace.** Tasks, notes, and projects, plus **Meeting Mode** (capture
+  raw notes and Luna turns them into a summary note, action-item tasks, and a grouping
+  project) and a **Write** assistant (rewrite/proofread text in a chosen style).
+- **Atlas — your research library.** Save any link or snippet; Atlas extracts and
+  **archives the full article on your machine** (link rot can't touch it) and Luna
+  summarizes it into a paragraph, key points, quotes, and tags. A distraction-free reader
+  with **highlights + margin notes**, click-to-zoom images, reading progress, and **Ask this
+  article** (scoped Q&A). Full-text search (SQLite FTS5), read-status and an "Up next"
+  queue, **synthesize** a briefing across several saved articles, send items to Orbit, and
+  export any article — or the whole library — to Markdown.
+
+## Features
+
+- **Local-first & private.** Chat threads, Orbit data, meeting sessions, and the entire
+  Atlas library (a local SQLite database) persist on this device. Your API key is encrypted
+  at rest via the OS keychain (Electron `safeStorage`) — it never touches disk in plaintext
+  or leaves your machine except to call the AI provider directly.
+- **Keyless graceful degradation.** Saving, reading, searching, and highlighting in Atlas
+  all work without an API key; AI features (summaries, synthesis, chat) light up once a key
+  is set.
 - **Built-in auto-updates.** The app checks GitHub Releases and offers one-click updates.
 - **Design.** Strict black-and-white, instrument-grade, 60fps motion.
 
@@ -28,17 +45,22 @@ and your workspace orbits as a planet. Everything you do stays on your machine.
 ## Tech stack
 
 Electron · Vite · React 19 · TypeScript · Tailwind CSS v4 · Zustand · electron-builder /
-electron-updater.
+electron-updater. Atlas stores articles and highlights in **SQLite** (`better-sqlite3`, a
+native module) with an FTS5 full-text index; article extraction uses `@mozilla/readability`
++ `linkedom`.
 
-The AI engine is **DeepSeek** (`deepseek-v4-flash`, OpenAI-compatible). All AI calls happen
-in the Electron main process.
+The AI engine is **DeepSeek** (`deepseek-v4-flash`, OpenAI-compatible). All AI calls, web
+search, and the Atlas database live in the Electron main process.
 
 ---
 
 ## Getting started
 
 **Prerequisites:** Node.js 20+ and npm. A [DeepSeek API key](https://platform.deepseek.com/)
-to bring Luna online (Orbit works without one).
+to bring Luna online (Orbit, and saving/reading/searching in Atlas, all work without one).
+
+> Atlas uses `better-sqlite3`, a native module. `npm install` rebuilds it for Electron
+> automatically via the `postinstall` hook (`electron-builder install-app-deps`).
 
 ```bash
 npm install
@@ -102,15 +124,16 @@ them in place.
 
 ```
 electron/          Main process — window, IPC, DeepSeek streaming, web search, updater
-  ipc/             keychain (encrypted keys), luna (chat), meeting (summarizer)
-  search/          Keyless web search + article extraction
+  ipc/             keychain (encrypted keys), luna (chat + tools), meeting (summarizer)
+  atlas/           SQLite library — db (FTS5), digest (AI summaries), export, IPC + Luna tools
+  search/          Keyless web search + article extraction (readability → markdown)
   updater.ts       GitHub auto-update service
 src/
-  views/           Home, Chat (Luna), Orbit, Settings
-  components/       Titlebar, Starfield, Updater
-  store/            Zustand stores (chat, orbit, meetings, settings, ui)
-  ui/               Design-system primitives (buttons, modals, fields, …)
-  lib/              Router + prompt helpers
+  views/           Home, Chat (Luna), Orbit, Atlas, Settings
+  components/       Titlebar, Starfield, Updater, Markdown, Lightbox
+  store/            Zustand stores (chat, orbit, meetings, atlas, settings, ui)
+  ui/               Design-system primitives (buttons, modals, context menu, …)
+  lib/              Router + prompt helpers + Orbit tool executor
 ```
 
 ---

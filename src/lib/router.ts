@@ -42,6 +42,15 @@ export function openModule(name: string) {
   go(home, mod, 'in')
 }
 
+export function openAtlas() {
+  const s = useUI.getState()
+  const home = el('home')
+  const atlas = el('atlas')
+  if (s.view !== 'home' || s.busy || !home || !atlas) return
+  s.set({ busy: true, view: 'atlas' })
+  go(home, atlas, 'in')
+}
+
 export function openSettings() {
   const s = useUI.getState()
   const home = el('home')

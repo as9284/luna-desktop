@@ -5,7 +5,7 @@ import { goHome } from '../lib/router'
 import { useChat } from '../store/chat'
 import { useSettings } from '../store/settings'
 import { systemPrompt, tempForMode } from '../lib/luna-prompt'
-import { ConfirmModal, IconButton } from '../ui'
+import { ConfirmModal, IconButton, openContextMenu, toast } from '../ui'
 import './chat.css'
 
 const fmtTime = (ts: number) => {
@@ -96,6 +96,10 @@ export default function Chat() {
     send(t, { temperature: tempForMode(mode), system: systemPrompt() })
   }
 
+  const copyText = (text: string, msg = 'Copied') => {
+    void navigator.clipboard.writeText(text).then(() => toast(msg))
+  }
+
   const last = messages[messages.length - 1]
   const showThinking = streaming && last?.role === 'assistant' && !last.content
 
@@ -135,7 +139,27 @@ export default function Chat() {
             <div className="grp-label">{q ? 'Results' : 'Recent'}</div>
             {q && visibleThreads.length === 0 && <div className="rail-empty">No matches</div>}
             {visibleThreads.map((t) => (
-              <div key={t.id} className={'thread' + (t.id === activeId ? ' active' : '')}>
+              <div
+                key={t.id}
+                className={'thread' + (t.id === activeId ? ' active' : '')}
+                onContextMenu={(e) =>
+                  openContextMenu(e, [
+                    { label: 'Open', onSelect: () => selectThread(t.id), disabled: t.id === activeId },
+                    { label: 'New conversation', onSelect: newThread },
+                    {
+                      label: 'Copy conversation',
+                      disabled: t.messages.length === 0,
+                      onSelect: () =>
+                        copyText(
+                          t.messages.map((m) => `${m.role === 'user' ? 'You' : 'Luna'}: ${m.content}`).join('\n\n'),
+                          'Conversation copied',
+                        ),
+                    },
+                    'sep',
+                    { label: 'Delete conversation', danger: true, onSelect: () => setConfirmDelete(t.id) },
+                  ])
+                }
+              >
                 <button className="thread-main" onClick={() => selectThread(t.id)}>
                   <span className="tt">
                     {streamingByThread[t.id] && <span className="thread-dot thread-dot--live" title="Responding…" />}
@@ -200,13 +224,25 @@ export default function Chat() {
               {messages.map((m) =>
                 m.role === 'assistant' && m.content === '' ? null : m.role === 'user' ? (
                   <div key={m.id} className="turn turn--user">
-                    <div className="bubble">{m.content}</div>
+                    <div
+                      className="bubble"
+                      onContextMenu={(e) =>
+                        openContextMenu(e, [{ label: 'Copy message', onSelect: () => copyText(m.content) }])
+                      }
+                    >
+                      {m.content}
+                    </div>
                   </div>
                 ) : (
                   <div key={m.id} className="turn turn--luna">
                     <span className="av" />
-                    <div className="voice">
-                      <Markdown content={m.content} />
+                    <div
+                      className="voice"
+                      onContextMenu={(e) =>
+                        openContextMenu(e, [{ label: 'Copy message', onSelect: () => copyText(m.content) }])
+                      }
+                    >
+                      <Markdown content={m.content} saveLinks />
                       <div className="msg-tools">
                         <CopyButton text={m.content} label="Copy message" />
                       </div>

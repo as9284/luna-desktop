@@ -133,6 +133,18 @@ export default function Settings() {
             <Switch checked={s.reducedMotion} onChange={(v) => s.set({ reducedMotion: v })} label="Reduce motion" />
           </Section>
 
+          <Section title="Atlas">
+            <Switch
+              checked={s.researchShelf}
+              onChange={(v) => s.set({ researchShelf: v })}
+              label="Keep research sources"
+            />
+            <p className="muted">
+              When Luna searches the web in chat, the pages she reads are archived to the Atlas library on a
+              “research” shelf, so nothing she cited is ever lost.
+            </p>
+          </Section>
+
           <Section title="About">
             <div className="settings-about">
               <span className="name">Luna Desktop</span>

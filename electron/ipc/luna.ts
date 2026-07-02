@@ -1,6 +1,7 @@
 import { ipcMain, type IpcMainEvent } from 'electron'
 import { getKey } from './keychain'
 import { runWebSearch } from '../search'
+import { runAtlasTool, saveResearchDoc } from '../atlas'
 
 const MODEL = 'deepseek-v4-flash'
 const ENDPOINT = 'https://api.deepseek.com/chat/completions'
@@ -25,6 +26,8 @@ interface ChatRequest {
   temperature?: number
   /** false disables tool use entirely (e.g. the writing assistant, which must only rewrite) */
   tools?: boolean
+  /** archive pages read during web search to the Atlas research shelf (opt-in setting) */
+  research?: boolean
 }
 
 const fn = (name: string, description: string, properties: Record<string, unknown>, required: string[] = []) => ({
@@ -62,6 +65,31 @@ const TOOLS = [
     ['id'],
   ),
   fn('orbit_remove_project', 'Delete an Orbit project.', { id: { type: 'string' } }, ['id']),
+
+  // Atlas — the user's research library of saved articles and snippets. Runs in the main process.
+  fn(
+    'atlas_search',
+    "Search the user's Atlas library (saved articles, snippets, highlights) by keywords. Use this whenever the user refers to something they saved, read, or highlighted.",
+    { query: { type: 'string', description: 'Keywords to search the library for' } },
+    ['query'],
+  ),
+  fn(
+    'atlas_get_article',
+    'Read a saved Atlas article in full: its text, summary, key points, and highlights. Get the id from atlas_search.',
+    { id: { type: 'string' } },
+    ['id'],
+  ),
+  fn(
+    'atlas_save_url',
+    "Save a web page into the user's Atlas library (extracts and archives the article, then summarizes it). Use when the user asks to save, keep, or remember a link.",
+    { url: { type: 'string' } },
+    ['url'],
+  ),
+  fn(
+    'atlas_list_highlights',
+    "List the user's Atlas highlights (passages they marked while reading), optionally filtered by keywords.",
+    { query: { type: 'string', description: 'Optional keywords to filter by' } },
+  ),
 ]
 
 /** Run an Orbit tool in the renderer (where the Orbit store lives) and await its result. */
@@ -125,11 +153,20 @@ export function registerLuna() {
               } catch {
                 // malformed arguments — treat as empty query below
               }
+              // research shelf: archive the pages Luna reads, fire-and-forget
+              const onDocs = req.research
+                ? (docs: { url: string; title: string | null; text: string; markdown: string }[]) => {
+                    for (const d of docs) void saveResearchDoc(d.url, d.title, d.text, d.markdown).catch(() => {})
+                  }
+                : undefined
               result = query
-                ? await runWebSearch(query, signal).catch(
+                ? await runWebSearch(query, signal, onDocs).catch(
                     (err) => `Search failed: ${err instanceof Error ? err.message : String(err)}`,
                   )
                 : 'No query provided.'
+            } else if (name.startsWith('atlas_')) {
+              e.sender.send(statusCh, 'Working in Atlas…')
+              result = await runAtlasTool(name, call.function.arguments || '{}', signal)
             } else if (name.startsWith('orbit_')) {
               e.sender.send(statusCh, 'Working in Orbit…')
               result = await runOrbitTool(e, name, call.function.arguments || '{}')

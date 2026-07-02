@@ -17,7 +17,9 @@ export default defineConfig({
       //   optional dep at bundle time unless it's marked external.
       // - electron-updater must stay external too: it has dynamic requires and is
       //   resolved from node_modules inside the packaged asar at runtime, not bundled.
-      main: { entry: 'electron/main.ts', vite: { build: { rollupOptions: { external: ['canvas', 'electron-updater'] } } } },
+      // - better-sqlite3 is a native module (.node binary) — it can never be bundled;
+      //   it resolves from node_modules (unpacked from the asar) at runtime.
+      main: { entry: 'electron/main.ts', vite: { build: { rollupOptions: { external: ['canvas', 'electron-updater', 'better-sqlite3'] } } } },
       preload: { input: 'electron/preload.ts' },
     }),
   ],

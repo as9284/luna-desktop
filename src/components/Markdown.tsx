@@ -63,7 +63,39 @@ function Pre({ children }: { children?: ReactNode }) {
   )
 }
 
-const Markdown = memo(function Markdown({ content }: { content: string }) {
+/** Tiny inline "save this link to Atlas" affordance next to links in chat answers. */
+function SaveLink({ href }: { href: string }) {
+  const [state, setState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const save = async () => {
+    if (state !== 'idle') return
+    setState('saving')
+    try {
+      const res = await window.api?.atlas.saveUrl(href)
+      if (res?.ok && res.item) {
+        setState('saved')
+        // summarize in the background; the item is already archived either way
+        if (!res.existed && !res.item.summary) void window.api?.atlas.digest(res.item.id).catch(() => {})
+      } else {
+        setState('idle')
+      }
+    } catch {
+      setState('idle')
+    }
+  }
+  return (
+    <button
+      className={'md-save' + (state === 'saved' ? ' saved' : '')}
+      title={state === 'saved' ? 'Saved to Atlas' : 'Save to Atlas'}
+      aria-label="Save link to Atlas"
+      onClick={save}
+      disabled={state !== 'idle'}
+    >
+      {state === 'saving' ? '…' : state === 'saved' ? '✓' : '+'}
+    </button>
+  )
+}
+
+const Markdown = memo(function Markdown({ content, saveLinks }: { content: string; saveLinks?: boolean }) {
   return (
     <div className="md">
       <ReactMarkdown
@@ -72,9 +104,12 @@ const Markdown = memo(function Markdown({ content }: { content: string }) {
         components={{
           pre: Pre,
           a: ({ href, children }) => (
-            <a href={href} target="_blank" rel="noreferrer">
-              {children}
-            </a>
+            <>
+              <a href={href} target="_blank" rel="noreferrer">
+                {children}
+              </a>
+              {saveLinks && href && /^https?:\/\//.test(href) && <SaveLink href={href} />}
+            </>
           ),
         }}
       >

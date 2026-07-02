@@ -3,6 +3,7 @@ import path from 'node:path'
 import { registerKeychain } from './ipc/keychain'
 import { registerLuna } from './ipc/luna'
 import { registerMeeting } from './ipc/meeting'
+import { registerAtlas } from './atlas'
 import { registerUpdater } from './updater'
 import { loadWindowState, trackWindowState, MIN_WIDTH, MIN_HEIGHT } from './window-state'
 
@@ -59,6 +60,7 @@ app.whenReady().then(() => {
   registerKeychain()
   registerLuna()
   registerMeeting()
+  registerAtlas(() => win)
   createWindow()
   registerUpdater(() => win)
 })

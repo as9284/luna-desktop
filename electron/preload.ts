@@ -22,7 +22,13 @@ contextBridge.exposeInMainWorld('api', {
   // "Searching the web…", cleared with null); resolves on done, rejects on error.
   // Pass req.id to be able to cancel the request later via cancelChat(id).
   chat: (
-    req: { id?: string; messages: { role: string; content: string }[]; temperature?: number; tools?: boolean },
+    req: {
+      id?: string
+      messages: { role: string; content: string }[]
+      temperature?: number
+      tools?: boolean
+      research?: boolean
+    },
     onChunk: (token: string) => void,
     onStatus?: (status: string | null) => void,
   ) =>
@@ -68,6 +74,35 @@ contextBridge.exposeInMainWorld('api', {
     }
     ipcRenderer.on('luna:orbit-call', listener)
     return () => ipcRenderer.removeListener('luna:orbit-call', listener)
+  },
+
+  // Atlas — the research library. All data lives in SQLite in the main process.
+  atlas: {
+    saveUrl: (url: string) => ipcRenderer.invoke('atlas:save-url', url),
+    saveText: (title: string, text: string) => ipcRenderer.invoke('atlas:save-text', title, text),
+    digest: (id: string) => ipcRenderer.invoke('atlas:digest', id),
+    list: (filters?: { query?: string; status?: string; tag?: string; domain?: string }) =>
+      ipcRenderer.invoke('atlas:list', filters ?? {}),
+    get: (id: string) => ipcRenderer.invoke('atlas:get', id),
+    update: (
+      id: string,
+      patch: { title?: string; status?: string; queuedAt?: number | null; scroll?: number; tags?: string[] },
+    ) => ipcRenderer.invoke('atlas:update', id, patch),
+    remove: (id: string) => ipcRenderer.invoke('atlas:delete', id),
+    addHighlight: (itemId: string, text: string, note?: string) =>
+      ipcRenderer.invoke('atlas:highlight-add', itemId, text, note),
+    noteHighlight: (id: string, note: string) => ipcRenderer.invoke('atlas:highlight-note', id, note),
+    removeHighlight: (id: string) => ipcRenderer.invoke('atlas:highlight-delete', id),
+    highlights: (query?: string) => ipcRenderer.invoke('atlas:highlights', query),
+    related: (id: string) => ipcRenderer.invoke('atlas:related', id),
+    facets: () => ipcRenderer.invoke('atlas:facets'),
+    exportItems: (ids: string[]) => ipcRenderer.invoke('atlas:export', ids),
+    // fires after any library mutation (including ones Luna makes) so open views refresh
+    onChanged: (cb: () => void) => {
+      const handler = () => cb()
+      ipcRenderer.on('atlas:changed', handler)
+      return () => ipcRenderer.removeListener('atlas:changed', handler)
+    },
   },
 
   // GitHub auto-updates (notify & confirm)

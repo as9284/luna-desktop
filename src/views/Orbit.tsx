@@ -3,7 +3,7 @@ import { useUI } from '../store/ui'
 import { useOrbit, type ProjectStatus } from '../store/orbit'
 import { useMeetings, type MeetingSession } from '../store/meetings'
 import { goHome } from '../lib/router'
-import { Badge, Button, Checkbox, ConfirmModal, IconButton, Input, Modal, Segmented, Slider, Textarea, toast } from '../ui'
+import { Badge, Button, Checkbox, ConfirmModal, IconButton, Input, Modal, openContextMenu, Segmented, Slider, Textarea, toast } from '../ui'
 import './orbit.css'
 
 type Tab = 'tasks' | 'notes' | 'projects' | 'meeting' | 'write'
@@ -67,7 +67,18 @@ function Tasks() {
       ) : (
         <ul className="task-list">
           {tasks.map((t) => (
-            <li key={t.id} className={'task' + (t.done ? ' done' : '')}>
+            <li
+              key={t.id}
+              className={'task' + (t.done ? ' done' : '')}
+              onContextMenu={(e) =>
+                openContextMenu(e, [
+                  { label: t.done ? 'Mark as not done' : 'Mark as done', onSelect: () => toggleTask(t.id) },
+                  { label: 'Copy text', onSelect: () => void navigator.clipboard.writeText(t.text).then(() => toast('Copied')) },
+                  'sep',
+                  { label: 'Delete task', danger: true, onSelect: () => setConfirmDelete(t.id) },
+                ])
+              }
+            >
               <Checkbox checked={t.done} onChange={() => toggleTask(t.id)} label={<span className="task-text">{t.text}</span>} />
               <IconButton label="Delete task" className="row-del" onClick={() => setConfirmDelete(t.id)}>
                 <XIcon />
@@ -129,7 +140,25 @@ function Notes() {
       ) : (
         <div className="note-grid">
           {notes.map((n) => (
-            <button key={n.id} className="note-card" onClick={() => setEditing(n.id)}>
+            <button
+              key={n.id}
+              className="note-card"
+              onClick={() => setEditing(n.id)}
+              onContextMenu={(e) =>
+                openContextMenu(e, [
+                  { label: 'Open', onSelect: () => setEditing(n.id) },
+                  {
+                    label: 'Copy',
+                    onSelect: () =>
+                      void navigator.clipboard
+                        .writeText([n.title, n.body].filter(Boolean).join('\n\n'))
+                        .then(() => toast('Copied')),
+                  },
+                  'sep',
+                  { label: 'Delete note', danger: true, onSelect: () => setConfirmDelete(n.id) },
+                ])
+              }
+            >
               <b>{n.title || 'Untitled'}</b>
               <p>{n.body || 'Empty note'}</p>
               <i>{fmt(n.ts)}</i>
@@ -197,6 +226,7 @@ function Notes() {
 }
 
 const NEXT_STATUS: Record<ProjectStatus, ProjectStatus> = { active: 'paused', paused: 'done', done: 'active' }
+const STATUS_LABEL: Record<ProjectStatus, string> = { active: 'Mark active', paused: 'Mark paused', done: 'Mark done' }
 
 function Projects() {
   const projects = useOrbit((s) => s.projects)
@@ -235,7 +265,21 @@ function Projects() {
       ) : (
         <div className="proj-list">
           {projects.map((p) => (
-            <div key={p.id} className="proj">
+            <div
+              key={p.id}
+              className="proj"
+              onContextMenu={(e) =>
+                openContextMenu(e, [
+                  ...(Object.keys(STATUS_LABEL) as ProjectStatus[]).map((st) => ({
+                    label: STATUS_LABEL[st],
+                    disabled: p.status === st,
+                    onSelect: () => updateProject(p.id, { status: st }),
+                  })),
+                  'sep',
+                  { label: 'Delete project', danger: true, onSelect: () => setConfirmDelete(p.id) },
+                ])
+              }
+            >
               <div className="proj-top">
                 <b>{p.name}</b>
                 <button
@@ -507,10 +551,10 @@ function Meeting() {
                   }
                 }}
               />
-              <Button variant="secondary" small onClick={add} disabled={!draft.trim()}>
+              <Button variant="secondary" onClick={add} disabled={!draft.trim()}>
                 Add
               </Button>
-              <Button variant="primary" small onClick={end} disabled={ending}>
+              <Button variant="primary" onClick={end} disabled={ending}>
                 {ending ? 'Organizing…' : 'End & save'}
               </Button>
             </div>
@@ -548,7 +592,18 @@ function Meeting() {
         ) : (
           <div className="meeting-history">
             {sessions.map((s) => (
-              <button key={s.id} className="m-hist-row" onClick={() => setDetailId(s.id)}>
+              <button
+                key={s.id}
+                className="m-hist-row"
+                onClick={() => setDetailId(s.id)}
+                onContextMenu={(e) =>
+                  openContextMenu(e, [
+                    { label: 'Open', onSelect: () => setDetailId(s.id) },
+                    'sep',
+                    { label: 'Delete meeting', danger: true, onSelect: () => setConfirmDelete(s.id) },
+                  ])
+                }
+              >
                 <span className="m-hist-title">{s.title}</span>
                 <span className="m-hist-meta">
                   {fmt(s.endedAt ?? s.startedAt)} · {s.entries.length} {s.entries.length === 1 ? 'note' : 'notes'}

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type View = 'home' | 'luna' | 'module' | 'settings'
+export type View = 'home' | 'luna' | 'module' | 'atlas' | 'settings'
 
 interface UIState {
   view: View

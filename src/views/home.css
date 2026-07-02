@@ -42,23 +42,20 @@
   border-style: dashed;
   border-color: rgba(255, 255, 255, 0.05);
 }
+/* .track (rotation) and .upright (counter-rotation) transforms are set every frame
+   in JS — see the RAF loop in Home.tsx. Hover-freeze is handled there too. */
 .track {
   position: absolute;
   inset: 0;
   margin: auto;
-  animation: spin linear infinite;
 }
 .track--orbit {
   width: 540px;
   height: 540px;
-  animation-duration: 150s;
-  animation-delay: -80s;
 }
-.track:has(.body:hover) {
-  animation-play-state: paused;
-}
-.track:has(.body:hover) .upright {
-  animation-play-state: paused;
+.track--atlas {
+  width: 410px;
+  height: 410px;
 }
 .body {
   position: absolute;
@@ -71,13 +68,8 @@
   cursor: pointer;
 }
 .upright {
-  animation: spin-rev linear infinite;
   display: block;
   position: relative;
-}
-.track--orbit .upright {
-  animation-duration: 150s;
-  animation-delay: -80s;
 }
 .planet {
   display: block;
@@ -113,6 +105,34 @@
   transform: rotate(20deg) scaleY(0.32);
 }
 .stage:has(.body--orbit:hover) .ring--outer {
+  border-color: rgba(255, 255, 255, 0.26);
+  box-shadow: 0 0 30px rgba(206, 219, 255, 0.06);
+}
+/* Atlas — a small charted globe: darker body, thin meridian + equator lines */
+.planet--atlas {
+  width: 30px;
+  height: 30px;
+  overflow: visible;
+  background: radial-gradient(circle at 36% 28%, #d8dce6, #9aa0ae 48%, #4a4e59 100%);
+  box-shadow: 0 0 14px 2px rgba(255, 255, 255, 0.16);
+}
+.planet--atlas::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  transform: scaleX(0.42);
+}
+.planet--atlas::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  transform: scaleY(0.42);
+}
+.stage:has(.body--atlas:hover) .ring--inner {
   border-color: rgba(255, 255, 255, 0.26);
   box-shadow: 0 0 30px rgba(206, 219, 255, 0.06);
 }
@@ -244,16 +264,6 @@
   vertical-align: 1px;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@keyframes spin-rev {
-  to {
-    transform: rotate(-360deg);
-  }
-}
 @keyframes halo {
   0%,
   100% {

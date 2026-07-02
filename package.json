@@ -12,13 +12,15 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "make-icon": "node scripts/make-icon.mjs",
-    "dist": "tsc && vite build && electron-builder"
+    "dist": "tsc && vite build && electron-builder",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "@fontsource/inter": "^5.1.0",
     "@fontsource/jetbrains-mono": "^5.1.0",
     "@fontsource/space-grotesk": "^5.1.0",
     "@mozilla/readability": "^0.6.0",
+    "better-sqlite3": "^12.11.1",
     "electron-updater": "^6.8.9",
     "linkedom": "^0.18.12",
     "lucide-react": "^0.460.0",
@@ -31,6 +33,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

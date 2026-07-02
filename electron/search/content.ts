@@ -6,6 +6,8 @@ import { THIN_TEXT_CHARS } from './constants'
 export interface FetchedDocument {
   title: string | null
   text: string
+  /** structured markdown (paragraphs, images, formatting) — for the Atlas reader */
+  markdown: string
   excerpt: string | null
   ok: boolean
 }
@@ -18,7 +20,7 @@ async function tryBrowser(url: string, signal: AbortSignal): Promise<FetchedDocu
   try {
     const html = await renderHtml(url, signal)
     if (!html) return null
-    return { ...extractArticle(html), ok: true }
+    return { ...extractArticle(html, url), ok: true }
   } catch {
     return null
   }
@@ -44,7 +46,7 @@ async function fetchContentUncached(url: string, signal: AbortSignal): Promise<F
   const http = await fetchHtml(url, signal)
 
   if (http.ok && http.html) {
-    const ex = extractArticle(http.html)
+    const ex = extractArticle(http.html, http.finalUrl || url)
     if (ex.text.length >= THIN_TEXT_CHARS) return { ...ex, ok: true }
 
     const browserDoc = await tryBrowser(url, signal)
@@ -55,5 +57,5 @@ async function fetchContentUncached(url: string, signal: AbortSignal): Promise<F
   const browserDoc = await tryBrowser(url, signal)
   if (browserDoc) return browserDoc
 
-  return { title: null, text: '', excerpt: null, ok: false }
+  return { title: null, text: '', markdown: '', excerpt: null, ok: false }
 }

@@ -447,10 +447,12 @@
   align-items: flex-end;
   gap: 8px;
 }
-.m-draft {
+/* higher specificity than `textarea.input` (min-height:88px), so an empty draft is a
+   compact single-line bar that grows as you type — not a tall box with tiny buttons */
+textarea.input.m-draft {
   flex: 1;
   resize: none;
-  min-height: 44px;
+  min-height: 46px;
   max-height: 132px;
   overflow-y: auto;
   line-height: 1.5;
@@ -642,8 +644,12 @@
 
 
 /* ---------- Write (writing assistant) ---------- */
+/* fill the full module height so the two panes are tall and balanced instead of
+   floating short in the upper third with dead space below */
 .panel.write {
   max-width: 980px;
+  min-height: 100%;
+  padding-bottom: 28px;
 }
 .write .meeting-warn {
   margin: 0;
@@ -655,6 +661,7 @@
   flex-wrap: wrap;
 }
 .write-panes {
+  flex: 1;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
@@ -670,6 +677,7 @@
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+  min-height: 0;
 }
 .write-pane-head {
   display: flex;
@@ -682,12 +690,14 @@
   gap: 8px;
 }
 .write-in {
-  min-height: 260px;
-  resize: vertical;
+  flex: 1;
+  min-height: 180px;
+  resize: none;
   line-height: 1.6;
 }
 .write-out {
-  min-height: 260px;
+  flex: 1;
+  min-height: 180px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.03);
