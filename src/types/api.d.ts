@@ -14,10 +14,33 @@ interface MeetingArtifacts {
 
 declare global {
 type AtlasStatus = 'unread' | 'reading' | 'done'
+type AtlasMediaType = 'article' | 'social' | 'video' | 'image' | 'pdf' | 'stub'
+
+interface AtlasQuotedPost {
+  author?: string
+  handle?: string
+  text?: string
+  media?: string[]
+}
+
+interface AtlasMeta {
+  author?: string
+  handle?: string
+  avatar?: string
+  siteName?: string
+  publishedAt?: string
+  media?: string[]
+  hero?: string
+  duration?: string
+  pages?: number
+  quoted?: AtlasQuotedPost
+  stats?: { label: string; value: string }[]
+}
 
 interface AtlasItem {
   id: string
   kind: 'url' | 'text'
+  mediaType: AtlasMediaType
   url: string | null
   domain: string | null
   title: string
@@ -34,6 +57,7 @@ interface AtlasItem {
   scroll: number
   body?: string
   content?: string
+  meta?: AtlasMeta | null
 }
 
 interface AtlasHighlight {

@@ -41,6 +41,25 @@ const PinIcon = () => (
 const NEXT_STATUS: Record<AtlasStatus, AtlasStatus> = { unread: 'reading', reading: 'done', done: 'unread' }
 const STATUS_LABEL: Record<AtlasStatus, string> = { unread: 'Mark unread', reading: 'Mark reading', done: 'Mark done' }
 
+const TYPE_LABEL: Record<AtlasMediaType, string> = {
+  article: '',
+  social: 'Post',
+  video: 'Video',
+  image: 'Image',
+  pdf: 'PDF',
+  stub: 'Link',
+}
+/** The small type chip shown on cards + in the reader — the platform, or a generic label. */
+const typeChip = (item: AtlasItem): string | null =>
+  item.mediaType === 'article' ? null : item.meta?.siteName || TYPE_LABEL[item.mediaType] || null
+
+/** Format a possibly-ISO / platform date string, falling back to the raw value. */
+const fmtWhen = (s?: string): string | null => {
+  if (!s) return null
+  const d = new Date(s)
+  return Number.isNaN(d.getTime()) ? s : fmt(d.getTime())
+}
+
 function Empty({ label, hint }: { label: string; hint: string }) {
   return (
     <div className="panel-empty">
@@ -336,6 +355,7 @@ function ItemCard({
       <p>{item.summary ?? item.excerpt ?? 'No preview'}</p>
       <div className="atlas-card-foot">
         <span className={'read-pill read-pill--' + item.status}>{item.status}</span>
+        {typeChip(item) && <Badge variant="outline">{typeChip(item)}</Badge>}
         {item.shelf === 'research' && <Badge variant="outline">research</Badge>}
         {item.tags.slice(0, 3).map((t) => (
           <Badge key={t} variant="subtle">
@@ -720,6 +740,86 @@ function AskPanel({ item, onClose }: { item: AtlasItem; onClose: () => void }) {
   )
 }
 
+const hideImg = (e: { currentTarget: HTMLImageElement }) => {
+  e.currentTarget.style.display = 'none'
+}
+
+/** Typed byline above the reader body: author/avatar/handle for posts, channel for video. */
+function ReaderHead({ item }: { item: AtlasItem }) {
+  const m = item.meta
+  if (!m) return null
+
+  if (item.mediaType === 'social') {
+    const sub = [m.handle, m.siteName, fmtWhen(m.publishedAt)].filter(Boolean).join(' · ')
+    return (
+      <div className="reader-post-head">
+        {m.avatar && <img className="reader-avatar" src={m.avatar} alt="" onError={hideImg} />}
+        <div className="reader-post-who">
+          {m.author && <b>{m.author}</b>}
+          {sub && <i>{sub}</i>}
+        </div>
+      </div>
+    )
+  }
+
+  if (item.mediaType === 'video') {
+    return (
+      <div className="reader-post-head">
+        <div className="reader-post-who">
+          {m.author && <b>{m.author}</b>}
+          <i>{m.siteName ?? 'Video'}</i>
+        </div>
+        {item.url && (
+          <a className="reader-stub-open" href={item.url} target="_blank" rel="noreferrer">
+            ▶ Watch ↗
+          </a>
+        )}
+      </div>
+    )
+  }
+
+  // a PDF with an extracted text layer reads like an article — badge it + offer the file
+  if (item.mediaType === 'pdf' && item.content) {
+    return (
+      <div className="reader-post-head">
+        <div className="reader-post-who">
+          <b>PDF</b>
+          {m.pages && <i>{m.pages} {m.pages === 1 ? 'page' : 'pages'}</i>}
+        </div>
+        {item.url && (
+          <a className="reader-stub-open" href={item.url} target="_blank" rel="noreferrer">
+            Open PDF ↗
+          </a>
+        )}
+      </div>
+    )
+  }
+
+  return null
+}
+
+/** Graceful-failure card for stub / pdf items: hero + excerpt + an open-original action. */
+function ReaderStub({ item }: { item: AtlasItem }) {
+  const hero = item.meta?.hero
+  const isPdf = item.mediaType === 'pdf'
+  return (
+    <div className="reader-stub">
+      {hero && <img src={hero} alt="" onError={hideImg} />}
+      {item.excerpt && <p>{item.excerpt}</p>}
+      <p className="reader-stub-note">
+        {isPdf
+          ? 'No text layer to read — this PDF looks scanned or image-only. Open it directly:'
+          : 'This page couldn’t be read in full — it may need a login or block readers.'}
+      </p>
+      {item.url && (
+        <a className="reader-stub-open" href={item.url} target="_blank" rel="noreferrer">
+          Open {isPdf ? 'PDF' : 'original'} ↗
+        </a>
+      )}
+    </div>
+  )
+}
+
 function Reader({ id }: { id: string }) {
   const openReader = useAtlas((s) => s.openReader)
   const addTask = useOrbit((s) => s.addTask)
@@ -917,6 +1017,8 @@ function Reader({ id }: { id: string }) {
             </div>
           </div>
 
+          <ReaderHead item={item} />
+
           <h2 className="reader-title">{item.title}</h2>
           <div className="reader-meta">
             {item.url ? (
@@ -955,6 +1057,7 @@ function Reader({ id }: { id: string }) {
               ))}
             </div>
           ) : (
+            (item.mediaType === 'article' || (item.mediaType === 'pdf' && !!item.content)) &&
             item.body?.trim() && (
               <div className="reader-digest reader-digest--none">
                 <span className="count">No summary yet</span>
@@ -966,6 +1069,9 @@ function Reader({ id }: { id: string }) {
             )
           )}
 
+          {item.mediaType === 'stub' || (item.mediaType === 'pdf' && !item.content) ? (
+            <ReaderStub item={item} />
+          ) : (
           <div className="reader-body" onMouseUp={onMouseUp}>
             {blocks.map((b, i) => {
               if (b.type === 'img')
@@ -1008,6 +1114,7 @@ function Reader({ id }: { id: string }) {
               return <p key={i}>{mark(b.text)}</p>
             })}
           </div>
+          )}
 
           {highlights.length > 0 && (
             <div className="reader-hls">

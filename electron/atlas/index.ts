@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
-import { fetchContent } from '../search/content'
+import { resolveLink } from './extract'
 import {
   addHighlight,
   allHighlights,
@@ -52,7 +52,11 @@ export interface SaveResult {
   error?: string
 }
 
-/** Fetch → extract (HTTP first, rendered fallback) → archive full text. Dedupes by URL. */
+/**
+ * Detect the link type (tweet, video, reddit thread, PDF, article, …), extract it the
+ * right way, and archive it as a typed item. Falls back to a clean stub — never a text
+ * dump — when a page can't be read. Dedupes by URL.
+ */
 export async function saveUrl(rawUrl: string, opts: { shelf?: 'research' | null } = {}, signal?: AbortSignal): Promise<SaveResult> {
   const url = normalizeUrl(rawUrl)
   if (!url) return { ok: false, error: 'That does not look like a valid link.' }
@@ -61,16 +65,18 @@ export async function saveUrl(rawUrl: string, opts: { shelf?: 'research' | null 
   if (existing) return { ok: true, item: existing, existed: true }
 
   const timeout = AbortSignal.timeout(EXTRACT_TIMEOUT_MS)
-  const doc = await fetchContent(url, signal ? AbortSignal.any([signal, timeout]) : timeout).catch(() => null)
-  if (!doc?.ok || !doc.text.trim()) return { ok: false, error: 'Could not read that page.' }
+  const doc = await resolveLink(url, signal ? AbortSignal.any([signal, timeout]) : timeout).catch(() => null)
+  if (!doc?.ok || (!doc.body.trim() && !doc.title)) return { ok: false, error: 'Could not read that page.' }
 
   const item = insertItem({
     kind: 'url',
+    mediaType: doc.mediaType,
     url,
     domain: domainOf(url),
     title: doc.title?.trim() || url,
-    body: doc.text.trim(),
-    content: doc.markdown?.trim() || null,
+    body: doc.body.trim(),
+    content: doc.content?.trim() || null,
+    meta: doc.meta,
     excerpt: doc.excerpt,
     shelf: opts.shelf ?? null,
   })

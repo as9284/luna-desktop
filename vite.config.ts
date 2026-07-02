@@ -19,7 +19,9 @@ export default defineConfig({
       //   resolved from node_modules inside the packaged asar at runtime, not bundled.
       // - better-sqlite3 is a native module (.node binary) — it can never be bundled;
       //   it resolves from node_modules (unpacked from the asar) at runtime.
-      main: { entry: 'electron/main.ts', vite: { build: { rollupOptions: { external: ['canvas', 'electron-updater', 'better-sqlite3'] } } } },
+      // - unpdf embeds a large pdf.js build with dynamic requires — keep it external and
+      //   dynamic-import()ed at runtime (pure JS, so it loads fine from inside the asar).
+      main: { entry: 'electron/main.ts', vite: { build: { rollupOptions: { external: ['canvas', 'electron-updater', 'better-sqlite3', 'unpdf'] } } } },
       preload: { input: 'electron/preload.ts' },
     }),
   ],

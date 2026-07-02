@@ -1,12 +1,15 @@
 import { app } from 'electron'
 import path from 'node:path'
 import Database from 'better-sqlite3'
+import type { AtlasMeta, MediaType } from './extract/types'
 
 export type AtlasStatus = 'unread' | 'reading' | 'done'
 
 export interface AtlasItem {
   id: string
   kind: 'url' | 'text'
+  /** what the link *is* — drives the type badge + reader chrome */
+  mediaType: MediaType
   url: string | null
   domain: string | null
   title: string
@@ -25,6 +28,8 @@ export interface AtlasItem {
   body?: string
   /** structured markdown (paragraphs, images, formatting) for the reader; body stays plain */
   content?: string
+  /** typed chrome (author, avatar, hero image, …) for social/video/stub items */
+  meta?: AtlasMeta | null
 }
 
 export interface AtlasHighlight {
@@ -55,11 +60,13 @@ export function getDb(): Database.Database {
     CREATE TABLE IF NOT EXISTS items (
       id TEXT PRIMARY KEY,
       kind TEXT NOT NULL,
+      media_type TEXT NOT NULL DEFAULT 'article',
       url TEXT,
       domain TEXT,
       title TEXT NOT NULL,
       body TEXT NOT NULL,
       content TEXT,
+      meta TEXT,
       excerpt TEXT,
       summary TEXT,
       key_points TEXT NOT NULL DEFAULT '[]',
@@ -103,9 +110,11 @@ export function getDb(): Database.Database {
     END;
   `)
 
-  // migrate DBs created before the reader stored structured markdown alongside plain body
+  // migrate DBs created before newer columns existed (structured markdown, typed items)
   const cols = (db.pragma('table_info(items)') as { name: string }[]).map((c) => c.name)
   if (!cols.includes('content')) db.exec('ALTER TABLE items ADD COLUMN content TEXT')
+  if (!cols.includes('media_type')) db.exec("ALTER TABLE items ADD COLUMN media_type TEXT NOT NULL DEFAULT 'article'")
+  if (!cols.includes('meta')) db.exec('ALTER TABLE items ADD COLUMN meta TEXT')
 
   return db
 }
@@ -122,10 +131,21 @@ const parseJson = (s: unknown): string[] => {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseMeta(s: unknown): AtlasMeta | null {
+  if (typeof s !== 'string' || !s) return null
+  try {
+    const v = JSON.parse(s)
+    return v && typeof v === 'object' ? (v as AtlasMeta) : null
+  } catch {
+    return null
+  }
+}
+
 function rowToItem(r: any, withBody = false): AtlasItem {
   const item: AtlasItem = {
     id: r.id,
     kind: r.kind,
+    mediaType: (r.media_type as MediaType) ?? 'article',
     url: r.url,
     domain: r.domain,
     title: r.title,
@@ -140,6 +160,7 @@ function rowToItem(r: any, withBody = false): AtlasItem {
     wordCount: r.word_count,
     savedAt: r.saved_at,
     scroll: r.scroll,
+    meta: parseMeta(r.meta),
   }
   if (withBody) {
     item.body = r.body
@@ -148,15 +169,17 @@ function rowToItem(r: any, withBody = false): AtlasItem {
   return item
 }
 
-const LIST_COLS = 'id, kind, url, domain, title, excerpt, summary, key_points, quotes, tags, status, queued_at, shelf, word_count, saved_at, scroll'
+const LIST_COLS = 'id, kind, media_type, url, domain, title, excerpt, summary, key_points, quotes, tags, status, queued_at, shelf, word_count, saved_at, scroll, meta'
 
 export function insertItem(fields: {
   kind: 'url' | 'text'
+  mediaType?: MediaType
   url: string | null
   domain: string | null
   title: string
   body: string
   content?: string | null
+  meta?: AtlasMeta | null
   excerpt: string | null
   shelf?: 'research' | null
 }): AtlasItem {
@@ -164,10 +187,19 @@ export function insertItem(fields: {
   const wordCount = fields.body ? fields.body.trim().split(/\s+/).length : 0
   getDb()
     .prepare(
-      `INSERT INTO items (id, kind, url, domain, title, body, content, excerpt, shelf, word_count, saved_at)
-       VALUES (@id, @kind, @url, @domain, @title, @body, @content, @excerpt, @shelf, @wordCount, @savedAt)`,
+      `INSERT INTO items (id, kind, media_type, url, domain, title, body, content, meta, excerpt, shelf, word_count, saved_at)
+       VALUES (@id, @kind, @mediaType, @url, @domain, @title, @body, @content, @meta, @excerpt, @shelf, @wordCount, @savedAt)`,
     )
-    .run({ id, ...fields, content: fields.content ?? null, shelf: fields.shelf ?? null, wordCount, savedAt: Date.now() })
+    .run({
+      id,
+      ...fields,
+      mediaType: fields.mediaType ?? 'article',
+      content: fields.content ?? null,
+      meta: fields.meta ? JSON.stringify(fields.meta) : null,
+      shelf: fields.shelf ?? null,
+      wordCount,
+      savedAt: Date.now(),
+    })
   return getItem(id)!
 }
 
