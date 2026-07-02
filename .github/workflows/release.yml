@@ -24,6 +24,12 @@ jobs:
           node-version: 20
           cache: npm
 
+      # node-gyp 9 (used by better-sqlite3) needs distutils, which Python 3.12 removed.
+      # Pin 3.11 so the native module compiles.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - run: npm ci
 
       # Builds the renderer + main, runs electron-builder, and uploads artifacts
