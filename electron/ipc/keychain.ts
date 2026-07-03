@@ -27,6 +27,14 @@ export function getKey(provider: string): string | null {
   }
 }
 
+/** Encrypt and store a key (main-process helper, e.g. for migrations). Empty clears it. */
+export function setKey(provider: string, key: string) {
+  const o = load()
+  if (key) o[provider] = safeStorage.encryptString(key).toString('base64')
+  else delete o[provider]
+  persist(o)
+}
+
 export function registerKeychain() {
   ipcMain.handle('keychain:save', (_e, provider: string, key: string) => {
     const o = load()

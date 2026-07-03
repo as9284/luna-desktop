@@ -2,7 +2,7 @@
 .view--orbit {
   display: flex;
   flex-direction: column;
-  background: radial-gradient(70% 50% at 50% -8%, rgba(206, 219, 255, 0.05), transparent 60%), #000;
+  background: radial-gradient(70% 50% at 50% -8%, rgba(var(--accent-rgb), calc(0.05 * var(--amb))), transparent 60%), #000;
 }
 .orbit-bg {
   position: absolute;
@@ -19,7 +19,7 @@
   width: 720px;
   height: 480px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(206, 219, 255, 0.09), transparent 70%);
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.09), transparent 70%);
 }
 
 .orbit-head {
@@ -54,7 +54,7 @@
   flex: 0 0 auto;
   border-radius: 50%;
   background: radial-gradient(circle at 36% 28%, #f8fafe, #cbd1de 50%, #6f7480 100%);
-  box-shadow: 0 0 22px 3px rgba(206, 219, 255, 0.28);
+  box-shadow: 0 0 22px 3px rgba(var(--accent-rgb), 0.28);
 }
 .orbit-id-txt h1 {
   font-family: var(--f-disp);
@@ -291,8 +291,8 @@
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: radial-gradient(circle at 36% 30%, #fff, #cfd6e6 55%, #6c7180);
-  box-shadow: 0 0 22px 4px rgba(206, 219, 255, 0.22);
+  background: radial-gradient(circle at 36% 30%, #fff, var(--accent) 55%, #6c7180);
+  box-shadow: 0 0 22px 4px rgba(var(--accent-rgb), 0.22);
   margin-bottom: 6px;
   opacity: 0.9;
 }
@@ -352,8 +352,8 @@
   height: 8px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: #cfe0ff;
-  box-shadow: 0 0 8px 1px rgba(206, 219, 255, 0.85);
+  background: var(--accent);
+  box-shadow: 0 0 8px 1px rgba(var(--accent-rgb), 0.85);
   animation: breathe 3s ease-in-out infinite;
 }
 .meeting-warn {

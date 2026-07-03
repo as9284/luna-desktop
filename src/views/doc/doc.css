@@ -1,0 +1,335 @@
+/* Built-in document viewer. Solid dark surfaces only (no backdrop-filter — it would break the
+   depth-dolly blur on transforming ancestors, per the app-wide caveat). */
+
+.doc-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 78vh;
+  min-height: 420px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #0e0f13;
+}
+
+/* ---- toolbar ---- */
+.doc-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 10px;
+  background: #14161c;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.doc-tool-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.doc-tool-right {
+  margin-left: auto;
+}
+.doc-kind {
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.doc-hint {
+  font-size: 10px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.doc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  border-radius: 7px;
+  color: var(--ink-2);
+  border: 1px solid transparent;
+  transition: background 0.12s, color 0.12s;
+}
+.doc-btn:hover:not(:disabled) {
+  background: var(--glass);
+  color: var(--ink);
+}
+.doc-btn:disabled {
+  opacity: 0.35;
+}
+.doc-pageno,
+.doc-zoom {
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  color: var(--ink-2);
+  min-width: 46px;
+  text-align: center;
+}
+.doc-find-box {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #0e0f13;
+}
+.doc-find-ic {
+  color: var(--ink-3);
+}
+.doc-find-input {
+  width: 130px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--ink);
+  font-size: 12.5px;
+}
+.doc-find-count {
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  min-width: 30px;
+  text-align: right;
+  padding-right: 2px;
+}
+
+/* ---- scroll surface ---- */
+.doc-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: #0e0f13;
+}
+.doc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  color: var(--ink-2);
+  font-size: 13.5px;
+  padding: 40px;
+  text-align: center;
+}
+.doc-fallback,
+.doc-note {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.doc-fallback {
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.doc-fallback:hover {
+  background: var(--glass);
+  color: var(--ink);
+}
+.doc-note {
+  padding: 8px 14px;
+  text-align: center;
+}
+
+/* find highlight (works across every viewer's text) */
+mark.doc-find {
+  background: rgba(250, 204, 21, 0.42);
+  color: inherit;
+  border-radius: 2px;
+}
+mark.doc-find.current {
+  background: rgba(251, 146, 60, 0.85);
+}
+
+/* ---- pdf ---- */
+.pdf-host {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0 24px;
+}
+.pdf-page {
+  position: relative;
+  margin: 0 auto 14px;
+  background: #fff;
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
+}
+.pdf-page canvas {
+  display: block;
+}
+.pdf-page .textLayer {
+  position: absolute;
+  inset: 0;
+}
+
+/* ---- image ---- */
+.image-host {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 100%;
+  padding: 20px;
+}
+.doc-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 4px;
+}
+
+/* ---- docx ---- */
+.docx-host {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 30px;
+}
+.docx-host .docx-wrapper {
+  background: transparent;
+  padding: 0;
+}
+.docx-host .docx-wrapper > section.docx {
+  margin-bottom: 14px;
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
+}
+
+/* ---- prose (text / markdown / code) ---- */
+.doc-pad {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 22px 28px 40px;
+}
+.doc-text {
+  margin: 0;
+  padding: 22px 28px 40px;
+  font-family: var(--f-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---- sheet / csv grid ---- */
+.sheet-host {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+.sheet-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 8px 0;
+  overflow-x: auto;
+}
+.sheet-tab {
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: 7px 7px 0 0;
+  white-space: nowrap;
+}
+.sheet-tab.on {
+  color: var(--ink);
+  background: var(--glass);
+}
+.sheet-scroll {
+  overflow: auto;
+  flex: 1;
+}
+.sheet-grid {
+  border-collapse: collapse;
+  font-size: 12.5px;
+  color: var(--ink);
+  table-layout: fixed;
+}
+.sheet-grid th,
+.sheet-grid td {
+  border: 1px solid var(--line);
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sheet-colhead,
+.sheet-rowhead,
+.sheet-corner {
+  background: #191b22;
+  color: var(--ink-3);
+  font-weight: 500;
+  font-size: 11px;
+  text-align: center;
+  position: sticky;
+}
+.sheet-colhead {
+  top: 0;
+  z-index: 2;
+}
+.sheet-rowhead {
+  left: 0;
+  z-index: 1;
+}
+.sheet-corner {
+  top: 0;
+  left: 0;
+  z-index: 3;
+}
+.csv-head {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+/* ---- slides ---- */
+.slides-host {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  padding: 20px 16px 34px;
+}
+.slide-wrap {
+  width: min(920px, 100%);
+}
+.slide-num {
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  margin-bottom: 5px;
+}
+.slide {
+  position: relative;
+  width: 100%;
+  background: #fff;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 4px 26px rgba(0, 0, 0, 0.55);
+}
+.slide-canvas {
+  position: absolute;
+  inset: 0;
+  container-type: size;
+  color: #111;
+}
+.slide-tb {
+  position: absolute;
+  overflow: hidden;
+  line-height: 1.15;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.slide-img {
+  position: absolute;
+  object-fit: contain;
+}

@@ -414,7 +414,7 @@ function Meeting() {
   const draftRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
-    window.api?.hasKey('deepseek').then(setHasKey).catch(() => {})
+    window.api?.hasKey('llm-main').then(setHasKey).catch(() => {})
   }, [])
 
   const entryCount = activeSession?.entries.length ?? 0
@@ -697,7 +697,7 @@ function Write() {
   const [hasKey, setHasKey] = useState(true)
 
   useEffect(() => {
-    window.api?.hasKey('deepseek').then(setHasKey).catch(() => {})
+    window.api?.hasKey('llm-main').then(setHasKey).catch(() => {})
   }, [])
 
   const running = !!reqId

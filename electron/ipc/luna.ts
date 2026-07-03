@@ -1,24 +1,12 @@
-import { ipcMain, type IpcMainEvent } from 'electron'
-import { getKey } from './keychain'
+import { type IpcMainEvent, ipcMain } from 'electron'
 import { runWebSearch } from '../search'
 import { runAtlasTool, saveResearchDoc } from '../atlas'
+import { LUNA_FS_TOOLS, LUNA_FS_TOOL_NAMES, runLunaFsTool } from '../luna'
+import { SOUL_TOOLS, SOUL_TOOL_NAMES, runSoulTool, composeIdentity } from '../soul'
+import { streamChat, hasKey, isNoKey, type ChatMsg } from '../llm'
 
-const MODEL = 'deepseek-v4-flash'
-const ENDPOINT = 'https://api.deepseek.com/chat/completions'
 /** Tool-call round trips before forcing a final answer without tools — guards against loops. */
 const MAX_ROUNDS = 5
-
-interface ToolCall {
-  id: string
-  type: 'function'
-  function: { name: string; arguments: string }
-}
-interface ChatMsg {
-  role: string
-  content: string | null
-  tool_calls?: ToolCall[]
-  tool_call_id?: string
-}
 
 interface ChatRequest {
   id: string
@@ -28,6 +16,8 @@ interface ChatRequest {
   tools?: boolean
   /** archive pages read during web search to the Atlas research shelf (opt-in setting) */
   research?: boolean
+  /** prepend Luna's composed identity (soul + rules + skills + memory) as the system prompt */
+  identity?: boolean
 }
 
 const fn = (name: string, description: string, properties: Record<string, unknown>, required: string[] = []) => ({
@@ -90,6 +80,23 @@ const TOOLS = [
     "List the user's Atlas highlights (passages they marked while reading), optionally filtered by keywords.",
     { query: { type: 'string', description: 'Optional keywords to filter by' } },
   ),
+  fn(
+    'atlas_save_text',
+    "Save a piece of text (e.g. a summary of a file Luna read, or notes) into the user's Atlas library as a saved item. Use when the user asks to file, keep, or archive something into Atlas.",
+    { title: { type: 'string' }, text: { type: 'string' } },
+    ['text'],
+  ),
+  fn(
+    'atlas_save_file',
+    "Read a document from disk (PDF, Word, Excel, text, code, or image) and file it into the user's Atlas library so it becomes searchable and re-readable, keeping a link back to the original file. Use when the user asks to add, save, or keep a document/file in Atlas.",
+    { path: { type: 'string', description: 'Absolute path to the file, inside the workspace or a granted folder' } },
+    ['path'],
+  ),
+
+  // Luna's own filesystem + code capabilities (workspace-scoped, permission-gated)
+  ...LUNA_FS_TOOLS,
+  // identity: load a skill's playbook, remember durable facts
+  ...SOUL_TOOLS,
 ]
 
 /** Run an Orbit tool in the renderer (where the Orbit store lives) and await its result. */
@@ -109,6 +116,49 @@ function runOrbitTool(e: IpcMainEvent, name: string, args: string): Promise<stri
   })
 }
 
+interface ChatCard {
+  module: 'orbit' | 'atlas'
+  action: string
+  title: string
+  subtitle?: string
+  itemType?: string
+  id?: string
+  count?: number
+}
+
+/** Turn a successful Orbit/Atlas tool result into an inline preview card for the chat. */
+function buildCard(name: string, resultJson: string): ChatCard | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let r: any
+  try {
+    r = JSON.parse(resultJson)
+  } catch {
+    return null
+  }
+  if (!r || r.error) return null // never card a failure
+
+  if (name === 'orbit_add_task' && r.task?.text) return { module: 'orbit', action: 'task', title: r.task.text }
+  if (name === 'orbit_set_task_done' && r.task?.text) return { module: 'orbit', action: r.task.done ? 'done' : 'task', title: r.task.text }
+  if (name === 'orbit_add_note' && r.note) return { module: 'orbit', action: 'note', title: r.note.title || 'Untitled note', subtitle: (r.note.body || '').slice(0, 120) || undefined }
+  if ((name === 'orbit_add_project' || name === 'orbit_update_project') && r.project?.name) {
+    return { module: 'orbit', action: 'project', title: r.project.name, subtitle: r.project.status || undefined }
+  }
+
+  if (name === 'atlas_search' && Array.isArray(r.results) && r.results.length) {
+    return {
+      module: 'atlas', action: 'search', count: r.results.length,
+      title: `${r.results.length} result${r.results.length > 1 ? 's' : ''} in Atlas`,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      subtitle: r.results.slice(0, 3).map((x: any) => x.title).filter(Boolean).join(' · ') || undefined,
+    }
+  }
+  if (name === 'atlas_get_article' && r.title) return { module: 'atlas', action: 'article', title: r.title, subtitle: r.summary || undefined, id: r.id }
+  if ((name === 'atlas_save_url' || name === 'atlas_save_text' || name === 'atlas_save_file') && r.saved) {
+    return { module: 'atlas', action: r.alreadySaved ? 'exists' : 'saved', title: r.saved.title, subtitle: r.saved.summary || undefined, id: r.saved.id }
+  }
+  return null
+}
+
 /** In-flight requests by id so the renderer can cancel them (stop button, thread deleted). */
 const inflight = new Map<string, AbortController>()
 
@@ -121,12 +171,12 @@ export function registerLuna() {
     const { id, messages, temperature } = req
     const chunkCh = `luna:chunk:${id}`
     const statusCh = `luna:status:${id}`
+    const cardCh = `luna:card:${id}`
     const doneCh = `luna:done:${id}`
     const errCh = `luna:err:${id}`
 
-    const key = getKey('deepseek')
-    if (!key) {
-      e.sender.send(errCh, 'No DeepSeek API key. Add one in Settings.')
+    if (!hasKey('main')) {
+      e.sender.send(errCh, 'No API key set. Add one in Settings.')
       return
     }
 
@@ -134,11 +184,25 @@ export function registerLuna() {
     inflight.set(id, controller)
     const signal = controller.signal
     const convo: ChatMsg[] = messages.map((m) => ({ role: m.role, content: m.content }))
+    // main chat runs on Luna's composed identity (soul + rules + skills index + memory);
+    // the writing assistant / meeting keep their own prompts and don't set this flag
+    if (req.identity) {
+      try {
+        convo.unshift({ role: 'system', content: composeIdentity() })
+      } catch {
+        // identity is best-effort — a missing/broken System dir must never block chat
+      }
+    }
 
     try {
       for (let round = 1; round <= MAX_ROUNDS; round++) {
         const withTools = req.tools !== false && round < MAX_ROUNDS
-        const { content, toolCalls, finishReason } = await streamOnce(convo, key, temperature, withTools, e, chunkCh, signal)
+        const { content, toolCalls, finishReason } = await streamChat(
+          'main',
+          convo,
+          { temperature, tools: withTools ? TOOLS : undefined, signal },
+          (delta) => e.sender.send(chunkCh, delta),
+        )
 
         if (finishReason === 'tool_calls' && toolCalls.length) {
           convo.push({ role: 'assistant', content: content || null, tool_calls: toolCalls })
@@ -170,9 +234,15 @@ export function registerLuna() {
             } else if (name.startsWith('orbit_')) {
               e.sender.send(statusCh, 'Working in Orbit…')
               result = await runOrbitTool(e, name, call.function.arguments || '{}')
+            } else if (LUNA_FS_TOOL_NAMES.has(name)) {
+              result = await runLunaFsTool(name, call.function.arguments || '{}', { event: e, signal, statusCh })
+            } else if (SOUL_TOOL_NAMES.has(name)) {
+              result = await runSoulTool(name, call.function.arguments || '{}')
             } else {
               result = JSON.stringify({ error: `Unknown tool: ${name}` })
             }
+            const card = buildCard(name, result)
+            if (card) e.sender.send(cardCh, card)
             convo.push({ role: 'tool', tool_call_id: call.id, content: result })
           }
           e.sender.send(statusCh, null)
@@ -185,86 +255,10 @@ export function registerLuna() {
     } catch (error) {
       // a cancelled request is a normal completion, not an error
       if (signal.aborted) e.sender.send(doneCh)
+      else if (isNoKey(error)) e.sender.send(errCh, 'No API key set. Add one in Settings.')
       else e.sender.send(errCh, error instanceof Error ? error.message : String(error))
     } finally {
       inflight.delete(id)
     }
   })
-}
-
-async function streamOnce(
-  convo: ChatMsg[],
-  key: string,
-  temperature: number | undefined,
-  withTools: boolean,
-  e: IpcMainEvent,
-  chunkCh: string,
-  signal: AbortSignal,
-): Promise<{ content: string; toolCalls: ToolCall[]; finishReason: string | null }> {
-  const res = await fetch(ENDPOINT, {
-    method: 'POST',
-    signal,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: convo,
-      stream: true,
-      temperature: temperature ?? 0.7,
-      ...(withTools ? { tools: TOOLS } : {}),
-    }),
-  })
-
-  if (!res.ok || !res.body) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`DeepSeek ${res.status}: ${text.slice(0, 300) || res.statusText}`)
-  }
-
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-  let buf = ''
-  let content = ''
-  const toolCalls: ToolCall[] = []
-  let finishReason: string | null = null
-
-  for (;;) {
-    const { value, done } = await reader.read()
-    if (done) break
-    buf += decoder.decode(value, { stream: true })
-    const lines = buf.split('\n')
-    buf = lines.pop() ?? ''
-    for (const line of lines) {
-      const l = line.trim()
-      if (!l.startsWith('data:')) continue
-      const data = l.slice(5).trim()
-      if (data === '[DONE]') continue
-      try {
-        const json = JSON.parse(data)
-        const choice = json.choices?.[0]
-        const delta = choice?.delta
-        if (delta?.content) {
-          content += delta.content
-          e.sender.send(chunkCh, delta.content)
-        }
-        if (delta?.tool_calls) mergeToolCallDelta(toolCalls, delta.tool_calls)
-        if (choice?.finish_reason) finishReason = choice.finish_reason
-      } catch {
-        // partial SSE frame — wait for more
-      }
-    }
-  }
-
-  return { content, toolCalls, finishReason }
-}
-
-function mergeToolCallDelta(
-  acc: ToolCall[],
-  deltas: { index?: number; id?: string; function?: { name?: string; arguments?: string } }[],
-) {
-  for (const d of deltas) {
-    const idx = d.index ?? 0
-    if (!acc[idx]) acc[idx] = { id: d.id ?? '', type: 'function', function: { name: '', arguments: '' } }
-    if (d.id) acc[idx].id = d.id
-    if (d.function?.name) acc[idx].function.name = d.function.name
-    if (d.function?.arguments) acc[idx].function.arguments += d.function.arguments
-  }
 }

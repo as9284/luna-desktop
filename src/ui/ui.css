@@ -124,8 +124,8 @@
 }
 .input:focus {
   outline: none;
-  border-color: rgba(206, 219, 255, 0.5);
-  box-shadow: 0 0 0 3px rgba(206, 219, 255, 0.12);
+  border-color: rgba(var(--accent-rgb), 0.5);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
 }
 textarea.input {
   height: auto;
@@ -224,7 +224,7 @@ textarea.input {
   opacity: 1;
 }
 .opt input:focus-visible + .box {
-  box-shadow: 0 0 0 3px rgba(206, 219, 255, 0.2);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.2);
 }
 .radio .box {
   border-radius: 50%;
@@ -304,7 +304,7 @@ textarea.input {
   border-radius: 50%;
   background: #fff;
   cursor: pointer;
-  box-shadow: 0 0 10px 1px rgba(206, 219, 255, 0.45);
+  box-shadow: 0 0 10px 1px rgba(var(--accent-rgb), 0.45);
 }
 .slider::-moz-range-thumb {
   width: 16px;
@@ -346,7 +346,7 @@ textarea.input {
   bottom: -1px;
   height: 1.5px;
   background: #fff;
-  box-shadow: 0 0 8px rgba(206, 219, 255, 0.5);
+  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.5);
 }
 .seg {
   display: inline-flex;
@@ -405,7 +405,7 @@ textarea.input {
   height: 5px;
   border-radius: 50%;
   background: currentColor;
-  box-shadow: 0 0 6px 1px rgba(206, 219, 255, 0.6);
+  box-shadow: 0 0 6px 1px rgba(var(--accent-rgb), 0.6);
 }
 
 /* tooltip */

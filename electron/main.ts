@@ -4,6 +4,9 @@ import { registerKeychain } from './ipc/keychain'
 import { registerLuna } from './ipc/luna'
 import { registerMeeting } from './ipc/meeting'
 import { registerAtlas } from './atlas'
+import { registerLunaFs } from './luna'
+import { registerLlm } from './llm'
+import { registerSoul } from './soul'
 import { registerUpdater } from './updater'
 import { loadWindowState, trackWindowState, MIN_WIDTH, MIN_HEIGHT } from './window-state'
 
@@ -58,9 +61,12 @@ ipcMain.on('win:close', () => win?.close())
 
 app.whenReady().then(() => {
   registerKeychain()
+  registerLlm()
   registerLuna()
   registerMeeting()
   registerAtlas(() => win)
+  registerLunaFs()
+  registerSoul()
   createWindow()
   registerUpdater(() => win)
 })

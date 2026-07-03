@@ -1,4 +1,4 @@
-import { useUI } from '../store/ui'
+import { useUI, type View } from '../store/ui'
 
 const el = (id: string) => document.getElementById(id)
 
@@ -51,13 +51,15 @@ export function openAtlas() {
   go(home, atlas, 'in')
 }
 
+/** Settings opens from any view (the gear lives in the titlebar, present everywhere). */
 export function openSettings() {
   const s = useUI.getState()
-  const home = el('home')
+  if (s.busy || s.view === 'settings') return
+  const from = el(s.view)
   const settings = el('settings')
-  if (s.view !== 'home' || s.busy || !home || !settings) return
+  if (!from || !settings) return
   s.set({ busy: true, view: 'settings' })
-  go(home, settings, 'in')
+  go(from, settings, 'in')
 }
 
 export function goHome() {
@@ -68,4 +70,18 @@ export function goHome() {
   if (!from) return
   s.set({ busy: true, view: 'home' })
   go(from, home, 'out')
+}
+
+/**
+ * Transition directly from the current view to any other — used by the inline chat cards to
+ * jump straight into Orbit/Atlas. View names double as the DOM ids, so el(target) resolves.
+ */
+export function navigateTo(target: View, moduleName?: string) {
+  const s = useUI.getState()
+  if (s.busy || s.view === target) return
+  const from = el(s.view)
+  const to = el(target)
+  if (!from || !to) return
+  s.set({ busy: true, view: target, ...(moduleName ? { module: moduleName } : {}) })
+  go(from, to, target === 'home' ? 'out' : 'in')
 }

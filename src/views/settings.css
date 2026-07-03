@@ -1,61 +1,477 @@
 .settings-view {
-  background: radial-gradient(70% 50% at 50% -8%, rgba(206, 219, 255, 0.05), transparent 60%), #000;
+  background: radial-gradient(70% 50% at 50% -8%, rgba(var(--accent-rgb), calc(0.05 * var(--amb))), transparent 60%), #000;
 }
-.settings-scroll {
+
+/* ---------- two-pane shell: nav rail + content ---------- */
+.settings-shell {
   position: absolute;
   inset: 0;
+  display: flex;
 }
-.settings-col {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 40px 32px 90px;
+
+.settings-nav {
+  width: 248px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 34px;
+  gap: 4px;
+  padding: 24px 14px 20px;
+  border-right: 1px solid var(--line-2);
 }
-.settings-head {
-  display: flex;
+.settings-back {
+  display: inline-flex;
   align-items: center;
-  gap: 16px;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 4px 6px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  transition: color 0.15s;
 }
-.settings-head h1 {
-  font-family: var(--f-disp);
-  font-weight: 600;
-  font-size: 24px;
+.settings-back:hover {
   color: var(--ink);
 }
-.sec-block {
+.settings-back svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.settings-brand {
+  font-family: var(--f-disp);
+  font-weight: 600;
+  font-size: 22px;
+  color: var(--ink);
+  padding: 8px 8px 16px;
+}
+.settings-nav-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 2px;
 }
-.sec-block > h2 {
-  font-family: var(--f-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line-2);
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  text-align: left;
+  color: var(--ink-2);
+  transition: background 0.15s, color 0.15s;
+}
+.settings-nav-item:hover {
+  background: var(--glass);
+  color: var(--ink);
+}
+.settings-nav-item.on {
+  background: rgba(var(--accent-rgb), 0.08);
+  color: var(--ink);
+}
+.settings-nav-ic {
+  display: inline-flex;
+  opacity: 0.9;
+}
+.settings-nav-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.settings-nav-label {
+  font-size: 13.5px;
   font-weight: 500;
 }
+.settings-nav-hint {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.settings-pane {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+.settings-pane-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 46px 44px 100px;
+}
+
+/* ---------- pane header ---------- */
+.pane-head {
+  margin-bottom: 28px;
+}
+.pane-head h1 {
+  font-family: var(--f-disp);
+  font-weight: 600;
+  font-size: 26px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.pane-sub {
+  margin-top: 8px;
+  max-width: 62ch;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+/* ---------- airy toggle rows ---------- */
+.pane-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 20px 0;
+  border-top: 1px solid var(--line-2);
+}
+.pane-row-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pane-row-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.pane-row-hint {
+  max-width: 54ch;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-3);
+}
+
 .row-inline {
   display: flex;
   gap: 10px;
   align-items: center;
 }
-.settings-about {
+
+/* ---------- appearance controls (label/hint over the control, hairline-separated) ---------- */
+.appear-field {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 0;
+  border-top: 1px solid var(--line-2);
+}
+.accent-swatches {
+  display: flex;
+  gap: 10px;
+}
+.accent-sw {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  transition: border-color 0.15s, transform 0.12s;
+}
+.accent-sw:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+}
+.accent-sw.on {
+  border-color: var(--ink);
+}
+.accent-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px 1px rgba(255, 255, 255, 0.14);
+}
+/* live sample — reflects the reading font + size settings as they change */
+.appear-preview {
+  margin-top: 2px;
+  padding: 15px 18px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.015);
+  color: var(--ink);
+  font-family: var(--read-font);
+  font-size: var(--read-size);
+  line-height: 1.7;
+}
+
+/* ---------- shared two-up field grid ---------- */
+.field-grid,
+.model-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 560px) {
+  .field-grid,
+  .model-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- model slots (hairline-separated, no boxes) ---------- */
+.model-slots {
+  display: flex;
+  flex-direction: column;
+}
+.model-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 28px 0;
+}
+.model-slot:first-child {
+  padding-top: 2px;
+}
+.model-slot + .model-slot {
+  border-top: 1px solid var(--line-2);
+}
+.model-slot-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.model-slot-title {
+  display: block;
+  font-family: var(--f-disp);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.model-slot-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.model-test {
   display: flex;
   align-items: center;
   gap: 12px;
 }
-.settings-about .name {
-  font-family: var(--f-disp);
-  font-size: 16px;
+.test-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+}
+.test-result::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.test-result.ok {
   color: var(--ink);
 }
-.muted {
+.test-result.ok::before {
+  background: radial-gradient(circle at 35% 30%, #fff, var(--accent));
+  box-shadow: 0 0 8px 1px rgba(var(--accent-rgb), 0.8);
+}
+.test-result.bad {
+  color: var(--danger);
+}
+.test-result.bad::before {
+  background: var(--danger);
+}
+
+/* ---------- Luna identity panel ---------- */
+.soul-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.soul-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.soul-hint {
+  margin-top: -6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+.soul-text {
+  font-family: var(--f-mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+/* profile textareas (About you / Custom instructions) — standalone inputs, taller than default */
+textarea.soul-text.short {
+  min-height: 132px;
+  resize: vertical;
+}
+
+/* the "editor" frame: filename header over a big monospace textarea */
+.soul-doc {
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.015);
+  transition: border-color 0.18s;
+}
+.soul-doc:focus-within {
+  border-color: rgba(var(--accent-rgb), 0.4);
+}
+.soul-doc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line-2);
+  background: rgba(255, 255, 255, 0.02);
+}
+.soul-doc-name {
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
   color: var(--ink-2);
-  font-size: 14px;
-  line-height: 1.6;
+}
+.soul-doc-meta {
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+.soul-doc textarea.soul-text {
+  min-height: min(58vh, 520px);
+  padding: 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  resize: none;
+}
+.soul-doc textarea.soul-text:hover {
+  border-color: transparent;
+}
+.soul-doc textarea.soul-text:focus {
+  box-shadow: none;
+}
+.soul-dirty {
+  font-size: 12px;
+  color: var(--ink-3);
+  align-self: center;
+}
+.skills-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.skills-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.mini-btn.wide {
+  width: auto;
+  gap: 6px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.skill-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.015);
+  font-size: 12.5px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+.skill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 300px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+}
+.skill-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  padding: 9px 11px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  cursor: pointer;
+  transition: background 0.16s;
+}
+.skill-row:hover {
+  background: var(--glass);
+}
+.skill-row.on {
+  background: rgba(var(--accent-rgb), 0.08);
+}
+.skill-name {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+.skill-desc {
+  font-size: 12px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.skill-editing-name {
+  font-family: var(--f-mono);
+  font-size: 13px;
+  color: var(--ink);
+  padding: 2px 2px 0;
+}
+
+/* ---------- about ---------- */
+.about-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.about-mark {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  font-family: var(--f-disp);
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  background: radial-gradient(120% 120% at 30% 20%, rgba(var(--accent-rgb), 0.16), rgba(255, 255, 255, 0.03));
+}
+.about-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.about-name {
+  font-family: var(--f-disp);
+  font-size: 18px;
+  color: var(--ink);
+}
+.about-tag {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.about-ver {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
 }

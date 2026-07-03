@@ -3,7 +3,7 @@ import Starfield from '../components/Starfield'
 import { openAtlas, openLuna, openModule } from '../lib/router'
 import { useChat } from '../store/chat'
 import { useSettings } from '../store/settings'
-import { systemPrompt, tempForMode } from '../lib/luna-prompt'
+import { CHAT_TEMPERATURE } from '../lib/luna-prompt'
 import './home.css'
 
 type Planet = 'orbit' | 'atlas'
@@ -26,7 +26,7 @@ const ORBIT: Record<Planet, { period: number; seed: number }> = {
 export default function Home() {
   const send = useChat((s) => s.send)
   const streaming = useChat((s) => !!s.streamingByThread[s.activeId])
-  const mode = useSettings((s) => s.mode)
+  const ambient = useSettings((s) => s.ambient)
   const [ask, setAsk] = useState('')
 
   const [hover, setHover] = useState<Planet | null>(null)
@@ -126,14 +126,16 @@ export default function Home() {
     openLuna()
     if (t) {
       setAsk('')
-      send(t, { temperature: tempForMode(mode), system: systemPrompt() })
+      send(t, { temperature: CHAT_TEMPERATURE })
     }
   }
 
   return (
     <div className="view stage" id="home">
       <div className="parallax" ref={parallax}>
-        <Starfield count={190} maxOpacity={0.6} />
+        {ambient !== 'off' && (
+          <Starfield count={ambient === 'subtle' ? 90 : 190} maxOpacity={ambient === 'subtle' ? 0.36 : 0.6} />
+        )}
         <div className="vignette" />
         <div className="system">
           <div className="ring ring--inner" />

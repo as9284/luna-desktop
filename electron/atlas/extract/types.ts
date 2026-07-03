@@ -4,7 +4,7 @@
  * the reader falls back to splitting `body` into paragraphs. `meta` carries the typed
  * chrome the reader renders above the body (author, avatar, hero image, …).
  */
-export type MediaType = 'article' | 'social' | 'video' | 'image' | 'pdf' | 'stub'
+export type MediaType = 'article' | 'social' | 'video' | 'image' | 'pdf' | 'stub' | 'file'
 
 export interface QuotedPost {
   author?: string
@@ -30,8 +30,14 @@ export interface AtlasMeta {
   hero?: string
   /** video length, "12:04" */
   duration?: string
-  /** page count for PDFs */
+  /** page count for PDFs / slide count for presentations */
   pages?: number
+  /** for a saved local document: absolute path to the original file on disk */
+  sourcePath?: string
+  /** for a saved local document: the file kind (pdf, docx, xlsx, pptx, csv, txt, code, image…) */
+  fileType?: string
+  /** for a saved local document: filename of the copy kept in the Atlas vault (viewer reads this) */
+  vaultFile?: string
   /** a quoted / embedded post (quoted tweet) */
   quoted?: QuotedPost
   /** small stat chips: likes, points, comments */

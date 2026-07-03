@@ -21,7 +21,11 @@ export default defineConfig({
       //   it resolves from node_modules (unpacked from the asar) at runtime.
       // - unpdf embeds a large pdf.js build with dynamic requires — keep it external and
       //   dynamic-import()ed at runtime (pure JS, so it loads fine from inside the asar).
-      main: { entry: 'electron/main.ts', vite: { build: { rollupOptions: { external: ['canvas', 'electron-updater', 'better-sqlite3', 'unpdf'] } } } },
+      // - mammoth (.docx) and exceljs (.xlsx) are pure-JS but heavy with dynamic requires —
+      //   same treatment: external + dynamic-import()ed by electron/luna/extract.ts.
+      // - fflate (.pptx unzip) is dynamic-import()ed by electron/luna/pptx.ts — keep it external
+      //   so it resolves from node_modules at runtime like the other document parsers.
+      main: { entry: 'electron/main.ts', vite: { build: { rollupOptions: { external: ['canvas', 'electron-updater', 'better-sqlite3', 'unpdf', 'mammoth', 'exceljs', 'fflate'] } } } },
       preload: { input: 'electron/preload.ts' },
     }),
   ],

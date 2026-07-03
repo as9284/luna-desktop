@@ -4,6 +4,8 @@ import { useAtlas } from '../store/atlas'
 import { useOrbit } from '../store/orbit'
 import Markdown from '../components/Markdown'
 import Lightbox from '../components/Lightbox'
+import DocViewer from './doc/DocViewer'
+import { hasVaultFile } from './doc/helpers'
 import {
   Badge,
   Button,
@@ -48,10 +50,15 @@ const TYPE_LABEL: Record<AtlasMediaType, string> = {
   image: 'Image',
   pdf: 'PDF',
   stub: 'Link',
+  file: 'Doc',
 }
 /** The small type chip shown on cards + in the reader — the platform, or a generic label. */
 const typeChip = (item: AtlasItem): string | null =>
-  item.mediaType === 'article' ? null : item.meta?.siteName || TYPE_LABEL[item.mediaType] || null
+  item.mediaType === 'article'
+    ? null
+    : item.mediaType === 'file'
+      ? (item.meta?.fileType || 'file').toUpperCase()
+      : item.meta?.siteName || TYPE_LABEL[item.mediaType] || null
 
 /** Format a possibly-ISO / platform date string, falling back to the raw value. */
 const fmtWhen = (s?: string): string | null => {
@@ -164,6 +171,23 @@ function CaptureModal({ open, onClose, hasKey }: { open: boolean; onClose: () =>
     setTitle('')
   }
 
+  const addFiles = async () => {
+    const api = window.api?.atlas
+    if (!api?.saveFile || running) return
+    setRunning(true)
+    const res = await api.saveFile().catch(() => [])
+    if (res.length) {
+      setLines(
+        res.map((r) =>
+          r.ok && r.item
+            ? { input: '', label: r.item.title, state: 'saved' as const }
+            : { input: '', label: r.name || 'File', state: 'failed' as const, error: r.error },
+        ),
+      )
+    }
+    setRunning(false)
+  }
+
   return (
     <Modal
       open={open}
@@ -182,6 +206,10 @@ function CaptureModal({ open, onClose, hasKey }: { open: boolean; onClose: () =>
       }
     >
       <div className="capture">
+        <div className="capture-files">
+          <Button variant="secondary" small disabled={running} onClick={addFiles}>Add documents from disk…</Button>
+          <span className="capture-hint">PDF · Word · Excel · text · code · images</span>
+        </div>
         <Textarea
           placeholder={'Paste links (one per line) — or any text to keep as a snippet…'}
           rows={5}
@@ -795,6 +823,24 @@ function ReaderHead({ item }: { item: AtlasItem }) {
     )
   }
 
+  // a saved local document — badge its type + offer to open the original on disk
+  if (item.mediaType === 'file') {
+    const sub = [m.pages ? `${m.pages} ${m.pages === 1 ? 'page' : 'pages'}` : null].filter(Boolean).join(' · ')
+    return (
+      <div className="reader-post-head">
+        <div className="reader-post-who">
+          <b>{(m.fileType || 'file').toUpperCase()}</b>
+          {sub && <i>{sub}</i>}
+        </div>
+        {m.sourcePath && (
+          <button className="reader-stub-open" onClick={() => void window.api?.files?.reveal(m.sourcePath!)}>
+            Open file ↗
+          </button>
+        )}
+      </div>
+    )
+  }
+
   return null
 }
 
@@ -862,7 +908,7 @@ function Reader({ id }: { id: string }) {
     setMissing(false)
     setItem(null)
     void load()
-    window.api?.hasKey('deepseek').then(setHasKey).catch(() => {})
+    window.api?.hasKey('llm-main').then(setHasKey).catch(() => {})
   }, [load])
 
   // opening an unread item starts it — done stays a deliberate click
@@ -920,7 +966,9 @@ function Reader({ id }: { id: string }) {
     const res = await window.api?.atlas.digest(id)
     setDigesting(false)
     if (!res) return
-    setItem(res.item)
+    // digest returns the item WITHOUT its body (list-shape row); keep the body/content we
+    // already have so the document viewer doesn't blank out after summarizing.
+    setItem((prev) => (prev ? { ...prev, ...res.item, body: res.item.body ?? prev.body, content: res.item.content ?? prev.content } : res.item))
     if (res.warning) toast(res.warning)
   }
 
@@ -975,6 +1023,8 @@ function Reader({ id }: { id: string }) {
     .filter(Boolean)
     .join(' · ')
   const blocks = readerBlocks(item)
+  // a filed local document with a vaulted copy renders in the built-in viewer instead of as text
+  const showDoc = hasVaultFile(item)
   const mark = (t: string) =>
     markParagraph(t, highlights, (h) => {
       setEditHl(h)
@@ -985,7 +1035,7 @@ function Reader({ id }: { id: string }) {
     <div className={'reader' + (askOpen ? ' ask-open' : '')}>
       <div className="reader-progress" ref={progressRef} />
       <div className="reader-scroll scroll-y" ref={scrollRef} onScroll={onScroll}>
-        <div className="reader-col">
+        <div className={'reader-col' + (showDoc ? ' reader-col--doc' : '')}>
           <div className="reader-bar">
             <button className="m-back" onClick={() => openReader(null)}>
               ‹ Library
@@ -1057,7 +1107,7 @@ function Reader({ id }: { id: string }) {
               ))}
             </div>
           ) : (
-            (item.mediaType === 'article' || (item.mediaType === 'pdf' && !!item.content)) &&
+            (item.mediaType === 'article' || item.mediaType === 'file' || (item.mediaType === 'pdf' && !!item.content)) &&
             item.body?.trim() && (
               <div className="reader-digest reader-digest--none">
                 <span className="count">No summary yet</span>
@@ -1069,7 +1119,9 @@ function Reader({ id }: { id: string }) {
             )
           )}
 
-          {item.mediaType === 'stub' || (item.mediaType === 'pdf' && !item.content) ? (
+          {showDoc ? (
+            <DocViewer item={item} />
+          ) : item.mediaType === 'stub' || (item.mediaType === 'pdf' && !item.content) ? (
             <ReaderStub item={item} />
           ) : (
           <div className="reader-body" onMouseUp={onMouseUp}>
@@ -1327,7 +1379,7 @@ export default function Atlas() {
 
   useEffect(() => {
     if (!loaded) void refresh()
-    window.api?.hasKey('deepseek').then(setHasKey).catch(() => {})
+    window.api?.hasKey('llm-main').then(setHasKey).catch(() => {})
   }, [loaded, refresh])
 
   return (

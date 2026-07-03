@@ -14,9 +14,13 @@ Three modules orbit Luna, each a full workspace of its own:
 
 - **Luna — AI chat.** Streaming conversations with proactive, keyless web search (no
   third-party search API): Luna searches the live web on its own whenever a question needs
-  current information. Luna can also act on your other modules through tools — creating and
-  updating Orbit tasks/notes/projects, and searching, reading, and saving Atlas articles —
-  directly from chat. Multi-thread history, all stored locally.
+  current information. She works with your files, too — reading documents (PDF, Word, Excel,
+  PowerPoint), writing and organizing files in a sandboxed workspace, running code for exact
+  answers, seeing images, and designing polished documents she can export to PDF — with a
+  permission prompt on every write, delete, or code run. Luna can also act on your other
+  modules through tools — creating and updating Orbit tasks/notes/projects, and searching,
+  reading, and saving Atlas articles — directly from chat. Multi-thread history, all stored
+  locally.
 - **Orbit — your workspace.** Tasks, notes, and projects, plus **Meeting Mode** (capture
   raw notes and Luna turns them into a summary note, action-item tasks, and a grouping
   project) and a **Write** assistant (rewrite/proofread text in a chosen style).
@@ -37,6 +41,9 @@ Three modules orbit Luna, each a full workspace of its own:
 - **Keyless graceful degradation.** Saving, reading, searching, and highlighting in Atlas
   all work without an API key; AI features (summaries, synthesis, chat) light up once a key
   is set.
+- **Yours to shape.** Luna's personality, memory, and skills are editable files (Settings →
+  Luna) — tune her voice and response style, reset or update the built-in skills (research,
+  writing, design, presentations, decisions, and more), or write your own.
 - **Built-in auto-updates.** The app checks GitHub Releases and offers one-click updates.
 - **Design.** Strict black-and-white, instrument-grade, 60fps motion.
 
@@ -49,15 +56,19 @@ electron-updater. Atlas stores articles and highlights in **SQLite** (`better-sq
 native module) with an FTS5 full-text index; article extraction uses `@mozilla/readability`
 + `linkedom`.
 
-The AI engine is **DeepSeek** (`deepseek-v4-flash`, OpenAI-compatible). All AI calls, web
-search, and the Atlas database live in the Electron main process.
+The AI engine is **provider-agnostic** — Luna talks to any **OpenAI-compatible** or
+**Anthropic-compatible** endpoint, configured in Settings as two slots: a **main** model
+(chat, writing, summaries) and an optional **vision** model (reads images/screenshots). All
+AI calls, web search, file/code tools, and the Atlas database live in the Electron main
+process.
 
 ---
 
 ## Getting started
 
-**Prerequisites:** Node.js 20+ and npm. A [DeepSeek API key](https://platform.deepseek.com/)
-to bring Luna online (Orbit, and saving/reading/searching in Atlas, all work without one).
+**Prerequisites:** Node.js 20+ and npm. An API key for any OpenAI- or Anthropic-compatible
+provider to bring Luna online (Orbit, and saving/reading/searching in Atlas, all work without
+one).
 
 > Atlas uses `better-sqlite3`, a native module. `npm install` rebuilds it for Electron
 > automatically via the `postinstall` hook (`electron-builder install-app-deps`).
@@ -67,7 +78,8 @@ npm install
 npm run dev
 ```
 
-On first launch, open **Settings** (gear in the title bar) and paste your DeepSeek API key.
+On first launch, open **Settings** (gear in the title bar), pick your provider (OpenAI or
+Anthropic), set the base URL + model, and paste your API key.
 
 ### Scripts
 
@@ -123,13 +135,16 @@ them in place.
 ## Project layout
 
 ```
-electron/          Main process — window, IPC, DeepSeek streaming, web search, updater
-  ipc/             keychain (encrypted keys), luna (chat + tools), meeting (summarizer)
-  atlas/           SQLite library — db (FTS5), digest (AI summaries), export, IPC + Luna tools
+electron/          Main process — window, IPC, LLM providers, capabilities, web search, updater
+  ipc/             keychain (encrypted keys), luna (chat + tool loop), meeting (summarizer)
+  llm/             Provider-agnostic LLM layer (OpenAI + Anthropic adapters, two model slots)
+  luna/            File/code/vision capabilities — sandboxed workspace, tools, extraction, PDF export
+  soul/            Luna's identity — editable soul, rules, skills, and memory
+  atlas/           SQLite library — db (FTS5), extract (link-type router), digest (AI summaries)
   search/          Keyless web search + article extraction (readability → markdown)
   updater.ts       GitHub auto-update service
 src/
-  views/           Home, Chat (Luna), Orbit, Atlas, Settings
+  views/           Home, Chat (Luna), Orbit, Atlas, Settings (+ Luna identity panel, doc viewers)
   components/       Titlebar, Starfield, Updater, Markdown, Lightbox
   store/            Zustand stores (chat, orbit, meetings, atlas, settings, ui)
   ui/               Design-system primitives (buttons, modals, context menu, …)

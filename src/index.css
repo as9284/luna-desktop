@@ -26,6 +26,58 @@
   --f-disp: 'Space Grotesk', system-ui, sans-serif;
   --f-body: 'Inter', system-ui, sans-serif;
   --f-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* ---- themeable appearance (driven by Settings → Appearance) ---- */
+  /* accent: the signature highlight/glow. --accent-rgb feeds rgba(), --accent is a solid tone. */
+  --accent-rgb: 206, 219, 255;
+  --accent: #cfd6e6;
+  /* interface scale (Compact / Default / Large) is applied via webFrame.setZoomFactor, not CSS */
+  /* long-form reading text (chat answers + Atlas reader) */
+  --read-font: var(--f-body);
+  --read-size: 15px;
+  /* ambient intensity multiplier: dims the background glows (starfield gated in JS) */
+  --amb: 1;
+}
+
+/* accent presets */
+:root[data-accent='violet'] {
+  --accent-rgb: 183, 148, 246;
+  --accent: #cbb4ff;
+}
+:root[data-accent='teal'] {
+  --accent-rgb: 104, 211, 205;
+  --accent: #b6efeb;
+}
+:root[data-accent='amber'] {
+  --accent-rgb: 240, 189, 110;
+  --accent: #ffddab;
+}
+:root[data-accent='rose'] {
+  --accent-rgb: 244, 158, 178;
+  --accent: #ffccd6;
+}
+:root[data-accent='sage'] {
+  --accent-rgb: 138, 214, 156;
+  --accent: #a6e5b4;
+}
+
+/* reading typography */
+:root[data-read-font='serif'] {
+  --read-font: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+}
+:root[data-read-size='small'] {
+  --read-size: 13.5px;
+}
+:root[data-read-size='large'] {
+  --read-size: 17px;
+}
+
+/* ambient background intensity */
+:root[data-ambient='subtle'] {
+  --amb: 0.45;
+}
+:root[data-ambient='off'] {
+  --amb: 0;
 }
 
 * {
@@ -138,7 +190,7 @@ body {
 }
 .dock:focus-within {
   border-color: rgba(255, 255, 255, 0.22);
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(206, 219, 255, 0.18),
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(var(--accent-rgb), 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 .dock--home {
@@ -154,8 +206,8 @@ body {
   height: 14px;
   border-radius: 50%;
   flex: 0 0 auto;
-  background: radial-gradient(circle at 36% 30%, #fff, #cfd6e6 55%, #6c7180);
-  box-shadow: 0 0 10px 1px rgba(206, 219, 255, 0.6);
+  background: radial-gradient(circle at 36% 30%, #fff, var(--accent) 55%, #6c7180);
+  box-shadow: 0 0 10px 1px rgba(var(--accent-rgb), 0.6);
 }
 .dock input {
   flex: 1;
@@ -198,26 +250,27 @@ body {
 .backbtn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   background: none;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 6px 12px;
+  border-radius: 10px;
+  padding: 9px 15px;
   color: var(--ink-2);
   cursor: pointer;
   font-family: var(--f-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   transition: 0.18s;
 }
 .backbtn:hover {
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--line-2);
 }
 .backbtn svg {
-  width: 12px;
-  height: 12px;
+  width: 15px;
+  height: 15px;
   stroke: currentColor;
   stroke-width: 1.6;
   fill: none;
@@ -226,8 +279,8 @@ body {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: radial-gradient(circle at 36% 30%, #fff, #cfd6e6 55%, #6c7180);
-  box-shadow: 0 0 10px 1px rgba(206, 219, 255, 0.55);
+  background: radial-gradient(circle at 36% 30%, #fff, var(--accent) 55%, #6c7180);
+  box-shadow: 0 0 10px 1px rgba(var(--accent-rgb), 0.55);
 }
 .brand .word {
   font-family: var(--f-mono);
@@ -253,8 +306,8 @@ body {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #cfe0ff;
-  box-shadow: 0 0 8px 1px rgba(206, 219, 255, 0.8);
+  background: var(--accent);
+  box-shadow: 0 0 8px 1px rgba(var(--accent-rgb), 0.8);
   animation: breathe 4s ease-in-out infinite;
 }
 .tb-right {

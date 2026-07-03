@@ -1,8 +1,6 @@
-import { getKey } from '../ipc/keychain'
+import { complete, hasKey, isNoKey } from '../llm'
 import { getItem, updateItem, type AtlasItem } from './db'
 
-const MODEL = 'deepseek-v4-flash'
-const ENDPOINT = 'https://api.deepseek.com/chat/completions'
 /** Enough for a solid digest without paying for a whole book each save. */
 const MAX_BODY_CHARS = 9000
 
@@ -66,32 +64,17 @@ export async function digestItem(id: string, signal?: AbortSignal): Promise<Dige
   if (!item) throw new Error('No saved item with that id.')
   if (!item.body?.trim()) return { item, warning: 'Nothing to digest — the item has no text.' }
 
-  const key = getKey('deepseek')
-  if (!key) return { item, warning: 'No API key set — saved without a summary. Add a key in Settings.' }
+  if (!hasKey('main')) return { item, warning: 'No API key set — saved without a summary. Add a key in Settings.' }
 
   try {
-    const res = await fetch(ENDPOINT, {
-      method: 'POST',
-      signal,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [{ role: 'user', content: buildPrompt(item.title, item.body) }],
-        temperature: 0.3,
-        stream: false,
-      }),
-    })
-    if (!res.ok) {
-      const t = await res.text().catch(() => '')
-      throw new Error(`${res.status}: ${t.slice(0, 200) || res.statusText}`)
-    }
-    const data = await res.json()
-    const parsed = parseDigest(data.choices?.[0]?.message?.content ?? '')
+    const content = await complete('main', [{ role: 'user', content: buildPrompt(item.title, item.body) }], { temperature: 0.3, signal })
+    const parsed = parseDigest(content)
     if (!parsed) throw new Error('unreadable response')
     const updated = updateItem(id, parsed)
     return { item: updated ?? item, warning: null }
   } catch (err) {
     if (signal?.aborted) return { item, warning: null }
+    if (isNoKey(err)) return { item, warning: 'No API key set — saved without a summary. Add a key in Settings.' }
     return { item, warning: `Summary failed (${err instanceof Error ? err.message : String(err)}). The item is saved — retry from its page.` }
   }
 }

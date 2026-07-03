@@ -106,7 +106,7 @@
 }
 .stage:has(.body--orbit:hover) .ring--outer {
   border-color: rgba(255, 255, 255, 0.26);
-  box-shadow: 0 0 30px rgba(206, 219, 255, 0.06);
+  box-shadow: 0 0 30px rgba(var(--accent-rgb), 0.06);
 }
 /* Atlas — a small charted globe: darker body, thin meridian + equator lines */
 .planet--atlas {
@@ -134,7 +134,7 @@
 }
 .stage:has(.body--atlas:hover) .ring--inner {
   border-color: rgba(255, 255, 255, 0.26);
-  box-shadow: 0 0 30px rgba(206, 219, 255, 0.06);
+  box-shadow: 0 0 30px rgba(var(--accent-rgb), 0.06);
 }
 /* Hover caption — a fixed, non-rotated element measured to sit under the planet.
    Kept OUT of the orbit's counter-rotating frame so it can never tilt sideways. */
@@ -186,8 +186,8 @@
   height: 130px;
   border-radius: 50%;
   background: radial-gradient(circle at 38% 32%, #fff 0%, #f1f4fb 26%, #c9cfdd 58%, #787e8c 100%);
-  box-shadow: 0 0 2px #fff, 0 0 26px 4px rgba(255, 255, 255, 0.5), 0 0 70px 18px rgba(206, 219, 255, 0.26),
-    0 0 150px 48px rgba(150, 180, 255, 0.1);
+  box-shadow: 0 0 2px #fff, 0 0 26px 4px rgba(255, 255, 255, 0.5), 0 0 70px 18px rgba(var(--accent-rgb), 0.26),
+    0 0 150px 48px rgba(var(--accent-rgb), 0.1);
   cursor: pointer;
   z-index: 3;
   animation: breathe 6s ease-in-out infinite;
@@ -258,8 +258,8 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #cfe0ff;
-  box-shadow: 0 0 7px 1px rgba(206, 219, 255, 0.8);
+  background: var(--accent);
+  box-shadow: 0 0 7px 1px rgba(var(--accent-rgb), 0.8);
   margin-right: 7px;
   vertical-align: 1px;
 }

@@ -1,8 +1,5 @@
 import { ipcMain } from 'electron'
-import { getKey } from './keychain'
-
-const MODEL = 'deepseek-v4-flash'
-const ENDPOINT = 'https://api.deepseek.com/chat/completions'
+import { complete, hasKey } from '../llm'
 
 export interface MeetingArtifacts {
   note: { title: string; content: string }
@@ -87,26 +84,11 @@ export function registerMeeting() {
       return { note: { title: title || 'Meeting notes', content: '' }, tasks: [], project: null, warning: 'No notes to summarize.' }
     }
 
-    const key = getKey('deepseek')
-    if (!key) return { ...fallback(title, notes), warning: 'No API key set — saved your raw notes. Add a key in Settings for AI summaries.' }
+    if (!hasKey('main')) return { ...fallback(title, notes), warning: 'No API key set — saved your raw notes. Add a key in Settings for AI summaries.' }
 
     try {
-      const res = await fetch(ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-        body: JSON.stringify({
-          model: MODEL,
-          messages: [{ role: 'user', content: buildPrompt(title, notes) }],
-          temperature: 0.4,
-          stream: false,
-        }),
-      })
-      if (!res.ok) {
-        const t = await res.text().catch(() => '')
-        throw new Error(`${res.status}: ${t.slice(0, 200) || res.statusText}`)
-      }
-      const data = await res.json()
-      const parsed = parseArtifacts(data.choices?.[0]?.message?.content ?? '')
+      const content = await complete('main', [{ role: 'user', content: buildPrompt(title, notes) }], { temperature: 0.4 })
+      const parsed = parseArtifacts(content)
       if (!parsed) throw new Error('unreadable response')
       return { ...parsed, warning: null }
     } catch (err) {
