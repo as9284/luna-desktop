@@ -8,6 +8,7 @@
  */
 import { streamOpenAI } from '../electron/llm/openai'
 import { streamAnthropic, toAnthropic } from '../electron/llm/anthropic'
+import { parseTextToolCalls, makeToolTextFilter, partialMarkerTail } from '../electron/llm/toolText'
 import type { ChatMsg, ModelConfig } from '../electron/llm/config'
 
 let pass = 0
@@ -124,6 +125,69 @@ section('Image content translation')
   const parts = (messages[0] as { content: { type: string; source?: { type: string; media_type: string } }[] }).content
   ok('image → anthropic base64 image block', parts.some((p) => p.type === 'image' && p.source?.type === 'base64' && p.source.media_type === 'image/png'))
   ok('text part preserved alongside image', parts.some((p) => p.type === 'text'))
+}
+
+// ---- text-format tool calls (models that emit XML instead of native tool_calls) ----------
+section('Text tool-call parser')
+{
+  // the exact shape DeepSeek V4 Flash emits
+  const content =
+    'Let me look that up.\n' +
+    '<function_calls>\n' +
+    '<invoke name="web_search">\n' +
+    '<parameter name="query" string="true">HS code 851712 smartphone Turkey import duty 2025</parameter>\n' +
+    '</invoke>\n' +
+    '<invoke name="web_search">\n' +
+    '<parameter name="query" string="true">Turkey VAT rate 2025 percentage</parameter>\n' +
+    '</invoke>\n' +
+    '</function_calls>'
+  const parsed = parseTextToolCalls(content)
+  ok('detects a text tool-call block', !!parsed)
+  ok('keeps the prose before the block as clean content', parsed?.clean === 'Let me look that up.', JSON.stringify(parsed?.clean))
+  ok('parses every invoke in the block', parsed?.calls.length === 2, String(parsed?.calls.length))
+  ok('reads the tool name', parsed?.calls[0]?.function.name === 'web_search')
+  ok(
+    'reads the parameter value as valid JSON arguments',
+    parsed?.calls[0]?.function.arguments === JSON.stringify({ query: 'HS code 851712 smartphone Turkey import duty 2025' }),
+    parsed?.calls[0]?.function.arguments,
+  )
+
+  ok('returns null when there is no block', parseTextToolCalls('just a normal answer, no tools.') === null)
+
+  // typed parameters coerce off their hint
+  const typed = parseTextToolCalls(
+    '<function_calls><invoke name="orbit_set_task_done">' +
+    '<parameter name="id" string="true">t1</parameter>' +
+    '<parameter name="done" boolean="true">true</parameter>' +
+    '</invoke></function_calls>',
+  )
+  ok('coerces a boolean parameter', typed?.calls[0]?.function.arguments === JSON.stringify({ id: 't1', done: true }), typed?.calls[0]?.function.arguments)
+
+  // a truncated block (stream cut off mid-value) yields the clean prose and no calls
+  const cut = parseTextToolCalls('Working on it.\n<function_calls>\n<invoke name="export_pdf">\n<parameter name="html" string="true"><html>')
+  ok('truncated block → clean prose, zero calls', cut?.clean === 'Working on it.' && cut?.calls.length === 0)
+}
+
+section('Text tool-call stream filter')
+{
+  // clean prose flows through; the XML never reaches the sink, even split across chunks
+  const chunks = ['Let me look ', 'that up.', '<function', '_calls>\n<invoke name="web_search">', '<parameter name="query" string="true">x</parameter></invoke></function_calls>']
+  const out: string[] = []
+  const filter = makeToolTextFilter((t) => out.push(t))
+  for (const c of chunks) filter.push(c)
+  filter.flush()
+  ok('streams only the prose, suppresses the XML', out.join('') === 'Let me look that up.', JSON.stringify(out.join('')))
+  ok('filter marks itself stopped after the marker', filter.stopped)
+
+  // no block → everything is emitted, including a trailing held-back tail
+  const out2: string[] = []
+  const f2 = makeToolTextFilter((t) => out2.push(t))
+  f2.push('a plain answer with a < in it')
+  f2.flush()
+  ok('passes normal text through untouched', out2.join('') === 'a plain answer with a < in it', JSON.stringify(out2.join('')))
+
+  ok('partialMarkerTail holds a split marker prefix', partialMarkerTail('foo <function') === 9)
+  ok('partialMarkerTail holds nothing for unrelated text', partialMarkerTail('all done.') === 0)
 }
 
 console.log(`\n\x1b[1mResults: \x1b[32m${pass} passed\x1b[0m, ${fail ? `\x1b[31m${fail} failed\x1b[0m` : '0 failed'}`)

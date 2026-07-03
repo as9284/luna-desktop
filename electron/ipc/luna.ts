@@ -5,8 +5,11 @@ import { LUNA_FS_TOOLS, LUNA_FS_TOOL_NAMES, runLunaFsTool } from '../luna'
 import { SOUL_TOOLS, SOUL_TOOL_NAMES, runSoulTool, composeIdentity } from '../soul'
 import { streamChat, hasKey, isNoKey, type ChatMsg } from '../llm'
 
-/** Tool-call round trips before forcing a final answer without tools — guards against loops. */
-const MAX_ROUNDS = 5
+/** Tool-call round trips before forcing a final answer without tools — guards against loops.
+ *  A research → save → build → export chain legitimately needs several, so keep real headroom. */
+const MAX_ROUNDS = 8
+
+const baseName = (p: string): string => p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() || p
 
 interface ChatRequest {
   id: string
@@ -117,13 +120,16 @@ function runOrbitTool(e: IpcMainEvent, name: string, args: string): Promise<stri
 }
 
 interface ChatCard {
-  module: 'orbit' | 'atlas'
+  module: 'orbit' | 'atlas' | 'file'
   action: string
   title: string
   subtitle?: string
   itemType?: string
   id?: string
   count?: number
+  /** absolute path for a file card — powers in-app preview + reveal-in-folder */
+  path?: string
+  fileType?: string
 }
 
 /** Turn a successful Orbit/Atlas tool result into an inline preview card for the chat. */
@@ -155,6 +161,20 @@ function buildCard(name: string, resultJson: string): ChatCard | null {
   if (name === 'atlas_get_article' && r.title) return { module: 'atlas', action: 'article', title: r.title, subtitle: r.summary || undefined, id: r.id }
   if ((name === 'atlas_save_url' || name === 'atlas_save_text' || name === 'atlas_save_file') && r.saved) {
     return { module: 'atlas', action: r.alreadySaved ? 'exists' : 'saved', title: r.saved.title, subtitle: r.saved.summary || undefined, id: r.saved.id }
+  }
+
+  // a file Luna created or updated → a card the user can preview / reveal
+  if ((name === 'write_file' || name === 'export_pdf') && r.ok && typeof r.path === 'string') {
+    const title = baseName(r.path)
+    const ext = title.includes('.') ? title.slice(title.lastIndexOf('.') + 1).toLowerCase() : ''
+    return {
+      module: 'file',
+      action: r.action === 'overwrite' ? 'updated' : 'created',
+      title,
+      subtitle: r.path,
+      path: r.path,
+      ...(ext ? { fileType: ext } : {}),
+    }
   }
   return null
 }
@@ -195,13 +215,24 @@ export function registerLuna() {
     }
 
     try {
+      // whether any visible text has been streamed so far — so a later round's prose is split
+      // from the previous round's with a paragraph break instead of being glued on ("with.Good")
+      let emittedText = false
       for (let round = 1; round <= MAX_ROUNDS; round++) {
         const withTools = req.tools !== false && round < MAX_ROUNDS
+        let roundHasText = false
+        const onDelta = (delta: string) => {
+          if (!delta) return
+          if (!roundHasText && emittedText) e.sender.send(chunkCh, '\n\n')
+          roundHasText = true
+          emittedText = true
+          e.sender.send(chunkCh, delta)
+        }
         const { content, toolCalls, finishReason } = await streamChat(
           'main',
           convo,
           { temperature, tools: withTools ? TOOLS : undefined, signal },
-          (delta) => e.sender.send(chunkCh, delta),
+          onDelta,
         )
 
         if (finishReason === 'tool_calls' && toolCalls.length) {

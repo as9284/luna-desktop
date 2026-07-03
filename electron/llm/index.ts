@@ -6,6 +6,7 @@ import {
 } from './config'
 import { streamOpenAI, completeOpenAI } from './openai'
 import { streamAnthropic, completeAnthropic } from './anthropic'
+import { makeToolTextFilter, parseTextToolCalls } from './toolText'
 
 export type { ChatMsg, ContentPart, ToolDef, ToolCall, StreamResult, Slot, Protocol, ModelConfig } from './config'
 
@@ -29,9 +30,32 @@ export async function streamChat(
   const cfg = getConfig(slot)
   const key = getSlotKey(slot)
   if (!key) throw new Error(NO_KEY)
-  return cfg.protocol === 'anthropic'
-    ? streamAnthropic(cfg, key, convo, opts, onDelta)
-    : streamOpenAI(cfg, key, convo, opts, onDelta)
+
+  // Some models emit tool calls as text (Anthropic function-calling XML) instead of native
+  // tool_calls/tool_use. The filter keeps that XML out of the live stream; parseTextToolCalls
+  // turns it back into real tool calls after the stream ends.
+  const filter = makeToolTextFilter(onDelta)
+  const result =
+    cfg.protocol === 'anthropic'
+      ? await streamAnthropic(cfg, key, convo, opts, (t) => filter.push(t))
+      : await streamOpenAI(cfg, key, convo, opts, (t) => filter.push(t))
+
+  if (result.toolCalls.length) {
+    filter.flush()
+    return result
+  }
+  const parsed = parseTextToolCalls(result.content)
+  if (!parsed) {
+    filter.flush()
+    return result
+  }
+  // A text tool-call block was present (and already withheld from the stream).
+  if (opts.tools?.length && parsed.calls.length) {
+    return { content: parsed.clean, toolCalls: parsed.calls, finishReason: 'tool_calls' }
+  }
+  // Tools weren't offered this round, or the block was truncated/malformed: drop the raw XML,
+  // keep only the clean prose so the tags never surface in the chat.
+  return { ...result, content: parsed.clean }
 }
 
 /** One-shot (non-streaming) completion — used for meeting wrap-ups and Atlas digests. */

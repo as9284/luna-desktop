@@ -146,6 +146,13 @@
   padding-left: 16px;
   max-width: 90%;
 }
+/* body{user-select:none} disables selection app-wide; re-enable it on message text so answers
+   (and the user's own messages) can be selected and copied by hand */
+.voice,
+.bubble {
+  user-select: text;
+  -webkit-user-select: text;
+}
 .voice p {
   font-size: 15px;
   line-height: 1.7;
@@ -380,6 +387,156 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-3);
+}
+
+/* file card: a preview button + a reveal-in-folder button share the row */
+.mod-card--file {
+  cursor: default;
+  gap: 8px;
+}
+.mod-open {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+.mod-reveal {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s, border-color 0.16s;
+}
+.mod-reveal:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--line-2);
+}
+
+/* ---------- in-app file preview ---------- */
+.fp-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 34px;
+  background: rgba(6, 8, 12, 0.74);
+}
+.fp-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(980px, 100%);
+  height: min(88vh, 100%);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--glass);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+.fp-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  padding: 10px 12px 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.fp-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fp-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.fp-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s;
+}
+.fp-btn:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+}
+.fp-zoom {
+  min-width: 40px;
+  font-family: var(--f-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  text-align: center;
+}
+.fp-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.18);
+}
+.fp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 60px 20px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.fp-fallback {
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+.fp-image-host {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  padding: 20px;
+}
+.fp-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+.fp-text {
+  margin: 0;
+  padding: 18px 20px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--f-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
 }
 
 /* ---------- inline permission cards ---------- */

@@ -4,11 +4,12 @@ import {
   Trash2, FileText, Terminal, FilePen, ShieldAlert, Eye, FolderSearch, Library, Orbit as OrbitIcon, Pencil,
 } from 'lucide-react'
 import Starfield from '../components/Starfield'
-import Markdown, { CopyButton } from '../components/Markdown'
+import Markdown, { CopyButton, plainTextFrom } from '../components/Markdown'
 import Lightbox from '../components/Lightbox'
+import FilePreview from './FilePreview'
 import { goHome, navigateTo } from '../lib/router'
 import { useAtlas } from '../store/atlas'
-import { useChat, type Attachment } from '../store/chat'
+import { useChat, type Attachment, type Msg } from '../store/chat'
 import { useSettings } from '../store/settings'
 import { CHAT_TEMPERATURE } from '../lib/luna-prompt'
 import { ConfirmModal, IconButton, openContextMenu, toast } from '../ui'
@@ -50,10 +51,29 @@ const baseName = (p: string) => p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ||
 const CARD_VERB: Record<string, string> = {
   task: 'task', done: 'marked done', note: 'note', project: 'project',
   saved: 'saved', exists: 'already saved', search: 'search', article: 'opened',
+  created: 'created', updated: 'updated',
 }
 
-/** Inline preview of a cross-module action Luna took — click to jump straight into the module. */
-function ModCard({ card }: { card: LunaChatCard }) {
+/** Inline preview of an action Luna took — click to jump into the module, or preview the file. */
+function ModCard({ card, onOpenFile }: { card: LunaChatCard; onOpenFile?: (path: string) => void }) {
+  if (card.module === 'file') {
+    const preview = () => card.path && onOpenFile?.(card.path)
+    const reveal = () => card.path && window.api?.files?.reveal(card.path)
+    return (
+      <div className="mod-card mod-card--file">
+        <button className="mod-open" onClick={preview} title="Preview file">
+          <span className="mod-ico"><FileText size={15} /></span>
+          <span className="mod-body">
+            <span className="mod-title">{card.title}</span>
+            {card.subtitle && <span className="mod-sub">{card.subtitle}</span>}
+          </span>
+        </button>
+        <span className="mod-tag">Luna · {CARD_VERB[card.action] ?? card.action}</span>
+        <button className="mod-reveal" onClick={reveal} title="Reveal in folder"><FolderOpen size={15} /></button>
+      </div>
+    )
+  }
+
   const isAtlas = card.module === 'atlas'
   const open = () => {
     if (isAtlas) {
@@ -75,6 +95,41 @@ function ModCard({ card }: { card: LunaChatCard }) {
         {card.itemType ? ` · ${card.itemType}` : ''}
       </span>
     </button>
+  )
+}
+
+/** One of Luna's turns. Holds a ref to the rendered answer so copy yields clean, unformatted
+ *  text (what you'd get by selecting it) rather than the raw markdown source. */
+function LunaTurn({ m, onOpenFile }: { m: Msg; onOpenFile: (path: string) => void }) {
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const cleanText = () => (bodyRef.current ? plainTextFrom(bodyRef.current) : m.content)
+  const copyMessage = () => void navigator.clipboard.writeText(cleanText()).then(() => toast('Copied'))
+  return (
+    <div className="turn turn--luna">
+      <span className="av" />
+      <div
+        className="voice"
+        onContextMenu={(e) => openContextMenu(e, [{ label: 'Copy message', onSelect: copyMessage }])}
+      >
+        {m.content && (
+          <div ref={bodyRef}>
+            <Markdown content={m.content} saveLinks />
+          </div>
+        )}
+        {!!m.cards?.length && (
+          <div className="mod-cards">
+            {m.cards.map((c, i) => (
+              <ModCard key={i} card={c} onOpenFile={onOpenFile} />
+            ))}
+          </div>
+        )}
+        {m.content && (
+          <div className="msg-tools">
+            <CopyButton getText={cleanText} label="Copy message" />
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -112,6 +167,7 @@ export default function Chat() {
   const [workspace, setWorkspace] = useState('')
   const [dragging, setDragging] = useState(false)
   const [viewer, setViewer] = useState<{ src: string; alt?: string } | null>(null)
+  const [preview, setPreview] = useState<string | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -354,29 +410,7 @@ export default function Chat() {
                   </div>
                 </div>
               ) : (
-                <div key={m.id} className="turn turn--luna">
-                  <span className="av" />
-                  <div
-                    className="voice"
-                    onContextMenu={(e) =>
-                      openContextMenu(e, [{ label: 'Copy message', onSelect: () => copyText(m.content) }])
-                    }
-                  >
-                    {m.content && <Markdown content={m.content} saveLinks />}
-                    {!!m.cards?.length && (
-                      <div className="mod-cards">
-                        {m.cards.map((c, i) => (
-                          <ModCard key={i} card={c} />
-                        ))}
-                      </div>
-                    )}
-                    {m.content && (
-                      <div className="msg-tools">
-                        <CopyButton text={m.content} label="Copy message" />
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <LunaTurn key={m.id} m={m} onOpenFile={setPreview} />
               ),
             )}
 
@@ -588,6 +622,7 @@ export default function Chat() {
       />
 
       {viewer && <Lightbox src={viewer.src} alt={viewer.alt} onClose={() => setViewer(null)} />}
+      {preview && <FilePreview path={preview} onClose={() => setPreview(null)} />}
     </div>
   )
 }

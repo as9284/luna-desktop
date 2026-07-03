@@ -249,6 +249,44 @@ export async function readForAtlas(inputPath: string, opts: { picked?: boolean }
   }
 }
 
+/* ---------------- in-app preview of a file Luna made ---------------- */
+
+const PREVIEW_MAX_BYTES = 30 * 1024 * 1024
+const PREVIEW_MIME: Record<string, string> = {
+  pdf: 'application/pdf',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+  webp: 'image/webp', gif: 'image/gif', bmp: 'image/bmp', svg: 'image/svg+xml',
+}
+export type PreviewKind = 'pdf' | 'image' | 'text'
+
+export interface PreviewResult {
+  ok: boolean
+  bytes?: Uint8Array
+  mime?: string
+  name?: string
+  kind?: PreviewKind
+  error?: string
+}
+
+/** Read a workspace/granted file's raw bytes so the renderer can preview it (pdf.js, <img>, <pre>). */
+async function readOutput(input: string): Promise<PreviewResult> {
+  init()
+  if (!input) return { ok: false, error: 'No path.' }
+  const g = guardPath(input, store!.guardConfig())
+  if (!g.ok) return { ok: false, error: g.error }
+  try {
+    const st = fs.statSync(g.real)
+    if (st.isDirectory()) return { ok: false, error: 'That path is a folder.' }
+    if (st.size > PREVIEW_MAX_BYTES) return { ok: false, error: 'File is too large to preview.' }
+    const ext = path.extname(g.real).replace(/^\./, '').toLowerCase()
+    const kind: PreviewKind = ext === 'pdf' ? 'pdf' : isImageExt(`.${ext}`) ? 'image' : 'text'
+    const bytes = new Uint8Array(fs.readFileSync(g.real))
+    return { ok: true, bytes, mime: PREVIEW_MIME[ext] ?? 'application/octet-stream', name: path.basename(g.real), kind }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
 /** Build the tool executor bound to a specific in-flight chat request (its event + signal). */
 export async function runLunaFsTool(
   name: string,
@@ -323,6 +361,7 @@ export function registerLunaFs() {
     if (typeof p === 'string' && p) shell.showItemInFolder(p)
     return true
   })
+  ipcMain.handle('luna:fs-read-output', (_e, p: unknown) => readOutput(typeof p === 'string' ? p : ''))
   ipcMain.handle('luna:fs-open-workspace', () => {
     init()
     shell.openPath(store!.ensureWorkspace())

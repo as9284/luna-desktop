@@ -173,13 +173,16 @@ interface UpdatesApi {
 
 declare global {
   interface LunaChatCard {
-    module: 'orbit' | 'atlas'
+    module: 'orbit' | 'atlas' | 'file'
     action: string
     title: string
     subtitle?: string
     itemType?: string
     id?: string
     count?: number
+    /** absolute path for a file card — powers in-app preview + reveal-in-folder */
+    path?: string
+    fileType?: string
   }
 
   type SoulFile = 'soul' | 'agents' | 'memory'
@@ -280,6 +283,9 @@ interface FilesApi {
   grantFolder: () => Promise<{ ok: boolean; grant?: LunaGrant; error?: string }>
   reveal: (path: string) => Promise<boolean>
   openWorkspace: () => Promise<boolean>
+  readOutput: (
+    path: string,
+  ) => Promise<{ ok: boolean; bytes?: Uint8Array; mime?: string; name?: string; kind?: 'pdf' | 'image' | 'text'; error?: string }>
   attach: () => Promise<LunaAttachment[]>
   attachPaths: (paths: string[]) => Promise<LunaAttachment[]>
   attachData: (name: string, data: Uint8Array, mime?: string) => Promise<LunaAttachment>

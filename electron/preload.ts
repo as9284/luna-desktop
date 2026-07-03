@@ -108,6 +108,8 @@ contextBridge.exposeInMainWorld('api', {
     grantFolder: () => ipcRenderer.invoke('luna:fs-grant-folder'),
     reveal: (path: string) => ipcRenderer.invoke('luna:fs-reveal', path),
     openWorkspace: () => ipcRenderer.invoke('luna:fs-open-workspace'),
+    // raw bytes of a workspace/granted file, for the in-app preview of things Luna made
+    readOutput: (path: string) => ipcRenderer.invoke('luna:fs-read-output', path),
     attach: () => ipcRenderer.invoke('luna:fs-attach'),
     attachPaths: (paths: string[]) => ipcRenderer.invoke('luna:fs-attach-paths', paths),
     // pasted clipboard image bytes → vision text + a thumbnail preview

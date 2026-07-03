@@ -16,7 +16,7 @@ const CheckIcon = () => (
   </svg>
 )
 
-export function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
+export function CopyButton({ text, getText, label = 'Copy' }: { text?: string; getText?: () => string; label?: string }) {
   const [copied, setCopied] = useState(false)
   return (
     <button
@@ -24,7 +24,7 @@ export function CopyButton({ text, label = 'Copy' }: { text: string; label?: str
       aria-label={label}
       title={label}
       onClick={() => {
-        navigator.clipboard.writeText(text).then(() => {
+        navigator.clipboard.writeText(getText ? getText() : text ?? '').then(() => {
           setCopied(true)
           setTimeout(() => setCopied(false), 1600)
         })
@@ -34,6 +34,21 @@ export function CopyButton({ text, label = 'Copy' }: { text: string; label?: str
       {copied ? 'Copied' : ''}
     </button>
   )
+}
+
+/**
+ * The on-screen text of a rendered message — no markdown syntax, no UI chrome (code-block
+ * language labels, the per-block copy button, the save-to-Atlas "+"). Renders an offscreen clone
+ * so block and line breaks come out the way they read, i.e. what a manual selection would copy.
+ */
+export function plainTextFrom(src: HTMLElement): string {
+  const clone = src.cloneNode(true) as HTMLElement
+  clone.querySelectorAll('.codeblock-bar, .md-save').forEach((el) => el.remove())
+  clone.style.cssText = 'position:fixed;left:-99999px;top:0'
+  document.body.appendChild(clone)
+  const text = clone.innerText
+  document.body.removeChild(clone)
+  return text.replace(/\n{3,}/g, '\n\n').trim()
 }
 
 // pull the raw text back out of a rendered code block for the copy button
