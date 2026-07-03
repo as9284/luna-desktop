@@ -137,7 +137,7 @@ interface AtlasApi {
   docModel: (id: string) => Promise<{ ok: boolean; model?: DocModel; error?: string }>
   openFile: (id: string) => Promise<{ ok: boolean; error?: string }>
   digest: (id: string) => Promise<{ item: AtlasItem; warning: string | null }>
-  list: (filters?: { query?: string; status?: AtlasStatus | 'queued'; tag?: string; domain?: string }) => Promise<AtlasItem[]>
+  list: (filters?: { query?: string; status?: AtlasStatus | 'queued'; tag?: string; domain?: string; shelf?: 'research' | 'none' }) => Promise<AtlasItem[]>
   get: (id: string) => Promise<{ item: AtlasItem; highlights: AtlasHighlight[] } | null>
   update: (
     id: string,
@@ -301,6 +301,11 @@ declare global {
     minimize: () => void
     maximize: () => void
     close: () => void
+    newWindow: () => void
+    system: {
+      getCloseToTray: () => Promise<boolean>
+      setCloseToTray: (on: boolean) => Promise<boolean>
+    }
     setZoom: (factor: number) => void
     onMaximized: (cb: (isMax: boolean) => void) => () => void
     saveKey: (provider: string, key: string) => Promise<boolean>

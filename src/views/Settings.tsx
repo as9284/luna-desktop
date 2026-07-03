@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Cpu, Sparkles, Palette, Library, Info } from 'lucide-react'
+import { Cpu, Sparkles, Palette, Library, Info, AppWindow } from 'lucide-react'
 import { Badge, Button, Field, Input, Segmented, Switch, toast } from '../ui'
 import { goHome } from '../lib/router'
 import { useSettings, type Accent, type UiScale, type ReadFont, type ReadSize, type Ambient } from '../store/settings'
@@ -145,13 +145,14 @@ function ModelCard({
   )
 }
 
-type Category = 'models' | 'luna' | 'appearance' | 'atlas' | 'about'
+type Category = 'models' | 'luna' | 'appearance' | 'atlas' | 'system' | 'about'
 
 const CATEGORIES: { id: Category; label: string; hint: string; icon: ReactNode }[] = [
   { id: 'models', label: 'Models', hint: 'Endpoints & keys', icon: <Cpu size={16} /> },
   { id: 'luna', label: 'Luna', hint: 'Personality & skills', icon: <Sparkles size={16} /> },
   { id: 'appearance', label: 'Appearance', hint: 'Motion', icon: <Palette size={16} /> },
   { id: 'atlas', label: 'Atlas', hint: 'Research library', icon: <Library size={16} /> },
+  { id: 'system', label: 'System', hint: 'Window & tray', icon: <AppWindow size={16} /> },
   { id: 'about', label: 'About', hint: 'Version & updates', icon: <Info size={16} /> },
 ]
 
@@ -170,11 +171,13 @@ export default function Settings() {
   const [llm, setLlm] = useState<{ main: LlmSlotConfig; vision: LlmSlotConfig } | null>(null)
   const [version, setVersion] = useState('')
   const [checking, setChecking] = useState(false)
+  const [closeToTray, setCloseToTray] = useState(false)
   const awaitingCheck = useRef(false)
 
   useEffect(() => {
     window.api?.llm?.get().then(setLlm).catch(() => {})
     window.api?.updates?.version().then(setVersion).catch(() => {})
+    window.api?.system?.getCloseToTray().then(setCloseToTray).catch(() => {})
     return window.api?.updates?.onEvent((e) => {
       if (!awaitingCheck.current) return
       if (e.type === 'available') {
@@ -409,6 +412,39 @@ export default function Settings() {
                     </span>
                   </div>
                   <Switch checked={s.researchShelf} onChange={(v) => s.set({ researchShelf: v })} />
+                </div>
+              </>
+            )}
+
+            {active === 'system' && (
+              <>
+                <PaneHead title="System" sub="How Luna behaves on your desktop." />
+                <div className="pane-row">
+                  <div className="pane-row-txt">
+                    <span className="pane-row-label">Close to tray</span>
+                    <span className="pane-row-hint">
+                      Closing the last window tucks Luna into the system tray instead of quitting — click the tray icon
+                      to bring it back. Off by default.
+                    </span>
+                  </div>
+                  <Switch
+                    checked={closeToTray}
+                    onChange={(v) => {
+                      setCloseToTray(v)
+                      void window.api?.system?.setCloseToTray(v)
+                    }}
+                  />
+                </div>
+                <div className="pane-row">
+                  <div className="pane-row-txt">
+                    <span className="pane-row-label">Multiple windows</span>
+                    <span className="pane-row-hint">
+                      Open as many windows as you like — the title-bar “new window” button, or Ctrl+Shift+N.
+                    </span>
+                  </div>
+                  <Button variant="secondary" small onClick={() => window.api?.newWindow?.()}>
+                    New window
+                  </Button>
                 </div>
               </>
             )}

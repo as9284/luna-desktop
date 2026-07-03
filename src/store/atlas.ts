@@ -11,6 +11,8 @@ export interface AtlasFilterState {
   status: 'all' | 'queued' | AtlasStatus
   tag: string | null
   domain: string | null
+  /** which shelf the list is scoped to: 'none' = the Library (user-saved), 'research' = Sources */
+  shelf: 'research' | 'none'
 }
 
 interface AtlasState {
@@ -25,7 +27,7 @@ interface AtlasState {
   refresh: () => Promise<void>
 }
 
-const DEFAULT_FILTERS: AtlasFilterState = { query: '', status: 'all', tag: null, domain: null }
+const DEFAULT_FILTERS: AtlasFilterState = { query: '', status: 'all', tag: null, domain: null, shelf: 'none' }
 
 export const useAtlas = create<AtlasState>((set, get) => ({
   items: [],
@@ -51,6 +53,7 @@ export const useAtlas = create<AtlasState>((set, get) => ({
         status: f.status === 'all' ? undefined : f.status,
         tag: f.tag ?? undefined,
         domain: f.domain ?? undefined,
+        shelf: f.shelf,
       }),
       api.facets(),
     ])

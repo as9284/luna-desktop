@@ -47,6 +47,8 @@ export interface AtlasFilters {
   status?: AtlasStatus | 'queued'
   tag?: string
   domain?: string
+  /** 'research' = only the auto-saved research shelf; 'none' = exclude it; undefined = everything */
+  shelf?: 'research' | 'none'
 }
 
 let db: Database.Database | null = null
@@ -280,6 +282,8 @@ export function listItems(filters: AtlasFilters = {}): AtlasItem[] {
     where.push('domain = @domain')
     params.domain = filters.domain
   }
+  if (filters.shelf === 'research') where.push("shelf = 'research'")
+  else if (filters.shelf === 'none') where.push('shelf IS NULL')
 
   let ids: Set<string> | null = null
   const q = filters.query?.trim()

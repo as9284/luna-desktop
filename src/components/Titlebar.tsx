@@ -30,6 +30,12 @@ export default function Titlebar() {
       )}
 
       <div className="tb-right">
+        <button className="tb-settings" aria-label="New window" title="New window" onClick={() => api?.newWindow()}>
+          <svg viewBox="0 0 24 24">
+            <rect x="4" y="6" width="12" height="12" rx="2" />
+            <path d="M19 10v9a2 2 0 0 1-2 2H9" />
+          </svg>
+        </button>
         <button className="tb-settings" aria-label="Settings" onClick={openSettings}>
           <svg viewBox="0 0 24 24">
             <path d="M4 7h9M19 7h1M4 12h1M11 12h9M4 17h11M21 17h-1" />

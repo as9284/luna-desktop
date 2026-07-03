@@ -23,7 +23,7 @@ import {
 } from '../ui'
 import './atlas.css'
 
-type Tab = 'library' | 'highlights'
+type Tab = 'library' | 'sources' | 'highlights'
 
 const fmt = (ts: number) =>
   new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
@@ -395,7 +395,8 @@ function ItemCard({
   )
 }
 
-function Library({ hasKey }: { hasKey: boolean }) {
+function Library({ hasKey, mode = 'library' }: { hasKey: boolean; mode?: 'library' | 'sources' }) {
+  const isSources = mode === 'sources'
   const items = useAtlas((s) => s.items)
   const facets = useAtlas((s) => s.facets)
   const filters = useAtlas((s) => s.filters)
@@ -469,7 +470,7 @@ function Library({ hasKey }: { hasKey: boolean }) {
 
   return (
     <div className="panel atlas-panel">
-      {!hasKey && (
+      {!hasKey && !isSources && (
         <div className="meeting-warn">
           Add an API key in Settings and Luna will summarize what you save. Saving, reading, and search work without
           one.
@@ -478,7 +479,7 @@ function Library({ hasKey }: { hasKey: boolean }) {
 
       <div className="add-row">
         <Input
-          placeholder="Search the library…"
+          placeholder={isSources ? 'Search sources…' : 'Search the library…'}
           value={filters.query}
           onChange={(e) => setFilters({ query: e.target.value })}
           style={{ flex: 1 }}
@@ -486,9 +487,11 @@ function Library({ hasKey }: { hasKey: boolean }) {
         <Button variant="secondary" small onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}>
           {selectMode ? 'Cancel' : 'Select'}
         </Button>
-        <Button variant="primary" small onClick={() => setCapture(true)}>
-          Save
-        </Button>
+        {!isSources && (
+          <Button variant="primary" small onClick={() => setCapture(true)}>
+            Save
+          </Button>
+        )}
       </div>
 
       <div className="atlas-filters">
@@ -523,7 +526,12 @@ function Library({ hasKey }: { hasKey: boolean }) {
 
       {items.length === 0 ? (
         filtersActive ? (
-          <Empty label="No matches" hint="Nothing in the library fits those filters." />
+          <Empty label="No matches" hint={isSources ? 'No sources fit those filters.' : 'Nothing in the library fits those filters.'} />
+        ) : isSources ? (
+          <Empty
+            label="No sources yet"
+            hint="With “Save research sources” on in Settings, pages Luna reads while researching land here — out of your library."
+          />
         ) : (
           <Empty label="Nothing saved yet" hint="Save a link or a snippet — Atlas keeps the full text forever." />
         )
@@ -545,7 +553,7 @@ function Library({ hasKey }: { hasKey: boolean }) {
 
       <div className="panel-foot">
         <span className="count">
-          {items.length} {items.length === 1 ? 'item' : 'items'}
+          {items.length} {(isSources ? 'source' : 'item') + (items.length === 1 ? '' : 's')}
           {queued > 0 ? ` · ${queued} up next` : ''}
         </span>
         {!selectMode && items.length > 0 && (
@@ -1370,17 +1378,22 @@ function HighlightsTab() {
 /* ================================================================ view */
 
 export default function Atlas() {
-  const loaded = useAtlas((s) => s.loaded)
-  const refresh = useAtlas((s) => s.refresh)
   const readingId = useAtlas((s) => s.readingId)
   const openReader = useAtlas((s) => s.openReader)
+  const setFilters = useAtlas((s) => s.setFilters)
   const [tab, setTab] = useState<Tab>('library')
   const [hasKey, setHasKey] = useState(true)
 
   useEffect(() => {
-    if (!loaded) void refresh()
     window.api?.hasKey('llm-main').then(setHasKey).catch(() => {})
-  }, [loaded, refresh])
+  }, [])
+
+  // keep the list scoped to the active tab's shelf: Library = user-saved, Sources = research.
+  // (Highlights loads its own data, so it needs no list refresh.)
+  useEffect(() => {
+    if (tab === 'library') setFilters({ shelf: 'none' })
+    else if (tab === 'sources') setFilters({ shelf: 'research' })
+  }, [tab, setFilters])
 
   return (
     <div className="view view--orbit view--atlas" id="atlas">
@@ -1408,6 +1421,7 @@ export default function Atlas() {
           <Segmented
             options={[
               { id: 'library', label: 'Library' },
+              { id: 'sources', label: 'Sources' },
               { id: 'highlights', label: 'Highlights' },
             ]}
             value={readingId ? '' : tab}
@@ -1420,7 +1434,13 @@ export default function Atlas() {
       </header>
 
       <div className="orbit-body scroll-y atlas-body">
-        {readingId ? <Reader key={readingId} id={readingId} /> : tab === 'library' ? <Library hasKey={hasKey} /> : <HighlightsTab />}
+        {readingId ? (
+          <Reader key={readingId} id={readingId} />
+        ) : tab === 'highlights' ? (
+          <HighlightsTab />
+        ) : (
+          <Library hasKey={hasKey} mode={tab} />
+        )}
       </div>
     </div>
   )

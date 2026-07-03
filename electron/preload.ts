@@ -4,6 +4,13 @@ contextBridge.exposeInMainWorld('api', {
   minimize: () => ipcRenderer.send('win:minimize'),
   maximize: () => ipcRenderer.send('win:maximize'),
   close: () => ipcRenderer.send('win:close'),
+  // open another app window (multi-window)
+  newWindow: () => ipcRenderer.send('win:new'),
+  // main-process app preferences (window/tray behavior)
+  system: {
+    getCloseToTray: () => ipcRenderer.invoke('app:get-close-to-tray'),
+    setCloseToTray: (on: boolean) => ipcRenderer.invoke('app:set-close-to-tray', on),
+  },
   // interface scale: true page zoom (reflows to fit the window, covers portaled UI)
   setZoom: (factor: number) => webFrame.setZoomFactor(factor),
   onMaximized: (cb: (isMax: boolean) => void) => {

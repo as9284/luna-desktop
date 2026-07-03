@@ -1,4 +1,4 @@
-import { app, ipcMain, type BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import electronUpdater from 'electron-updater'
 
 const { autoUpdater } = electronUpdater
@@ -9,11 +9,14 @@ const { autoUpdater } = electronUpdater
  * installs when the user asks. All update flow is packaged-only — in dev there is
  * no app-update.yml, so checks are short-circuited.
  */
-export function registerUpdater(getWin: () => BrowserWindow | null) {
+export function registerUpdater() {
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
 
-  const send = (channel: string, payload?: unknown) => getWin()?.webContents.send(channel, payload)
+  // broadcast so the update banner appears in every open window
+  const send = (channel: string, payload?: unknown) => {
+    for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload)
+  }
 
   autoUpdater.on('checking-for-update', () => send('updates:checking'))
   autoUpdater.on('update-available', (info) => send('updates:available', { version: info.version }))
