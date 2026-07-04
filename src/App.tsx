@@ -60,11 +60,6 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') goHome()
-      // Ctrl/Cmd+Shift+N opens another window (Ctrl+N is taken by "new conversation")
-      else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'n') {
-        e.preventDefault()
-        window.api?.newWindow?.()
-      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

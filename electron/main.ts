@@ -20,26 +20,25 @@ let tray: Tray | null = null
 /** true only during a real quit, so the close-to-tray handler lets windows actually close */
 let isQuitting = false
 
-/** The window a renderer IPC came from — window controls act on their own window, not a global one. */
+/** The single app window. Luna is a one-window app — only ever one of these exists. */
+let mainWindow: BrowserWindow | null = null
+
+/** The window a renderer IPC came from — window controls act on it. */
 const senderWindow = (e: Electron.IpcMainEvent) => BrowserWindow.fromWebContents(e.sender)
-/** Best window for a global action (native dialog parent, update banner target). */
-const currentWindow = (): BrowserWindow | null =>
-  BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null
+/** The app window for a global action (native dialog parent, update banner target). */
+const currentWindow = (): BrowserWindow | null => mainWindow
 
+/** Create the one window, or reveal + focus it if it already exists. */
 function createWindow(): BrowserWindow {
-  const isFirst = BrowserWindow.getAllWindows().length === 0
-  const state = loadWindowState()
-
-  // the first window restores the saved size/position; extra windows cascade off the focused one
-  let bounds = state.bounds
-  if (!isFirst) {
-    const ref = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows().at(-1)
-    const b = ref?.getBounds()
-    bounds = b ? { width: b.width, height: b.height, x: b.x + 34, y: b.y + 34 } : { width: state.bounds.width, height: state.bounds.height }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (!mainWindow.isVisible()) mainWindow.show()
+    mainWindow.focus()
+    return mainWindow
   }
 
+  const state = loadWindowState()
   const win = new BrowserWindow({
-    ...bounds,
+    ...state.bounds,
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
     frame: false,
@@ -49,13 +48,13 @@ function createWindow(): BrowserWindow {
       preload: path.join(__dirname, 'preload.js'),
     },
   })
+  mainWindow = win
 
-  // only the primary window restores maximized state and persists its bounds, so extra
-  // windows don't fight over the single saved-state file
-  if (isFirst && state.maximized) win.maximize()
-  if (isFirst) trackWindowState(win, state)
+  if (state.maximized) win.maximize()
+  trackWindowState(win, state)
 
   win.once('ready-to-show', () => win.show())
+  win.on('closed', () => { mainWindow = null })
 
   // links (e.g. in chat markdown) open in the system browser, never a new Electron window
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -66,12 +65,9 @@ function createWindow(): BrowserWindow {
   win.on('maximize', () => win.webContents.send('win:maximized', true))
   win.on('unmaximize', () => win.webContents.send('win:maximized', false))
 
-  // close-to-tray: the last visible window hides to the tray instead of quitting; extra
-  // windows close normally. Skipped entirely during a real quit.
+  // close-to-tray: hide to the tray instead of quitting (skipped during a real quit)
   win.on('close', (e) => {
     if (isQuitting || !getAppSettings().closeToTray) return
-    const othersVisible = BrowserWindow.getAllWindows().some((w) => w !== win && !w.isDestroyed() && w.isVisible())
-    if (othersVisible) return
     e.preventDefault()
     win.hide()
   })
@@ -102,16 +98,9 @@ function trayImage(): Electron.NativeImage {
   return nativeImage.createEmpty()
 }
 
-function showAllWindows() {
-  const wins = BrowserWindow.getAllWindows()
-  if (wins.length === 0) {
-    createWindow()
-    return
-  }
-  for (const w of wins) {
-    if (!w.isVisible()) w.show()
-    w.focus()
-  }
+/** Reveal and focus the window (creating it if it was fully closed). */
+function showWindow() {
+  createWindow()
 }
 
 function ensureTray() {
@@ -120,14 +109,13 @@ function ensureTray() {
   tray.setToolTip('Luna')
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Open Luna', click: showAllWindows },
-      { label: 'New window', click: () => createWindow() },
+      { label: 'Open Luna', click: showWindow },
       { type: 'separator' },
       { label: 'Quit Luna', click: () => { isQuitting = true; app.quit() } },
     ]),
   )
-  tray.on('click', showAllWindows)
-  tray.on('double-click', showAllWindows)
+  tray.on('click', showWindow)
+  tray.on('double-click', showWindow)
 }
 
 function destroyTray() {
@@ -151,19 +139,28 @@ ipcMain.on('win:maximize', (e) => {
   else w.maximize()
 })
 ipcMain.on('win:close', (e) => senderWindow(e)?.close())
-ipcMain.on('win:new', () => createWindow())
 
 ipcMain.handle('app:get-close-to-tray', () => getAppSettings().closeToTray)
 ipcMain.handle('app:set-close-to-tray', (_e, on: unknown) => {
   const value = !!on
   setAppSetting('closeToTray', value)
-  // turning it off removes the tray icon — un-hide any window tucked there so it isn't orphaned
-  if (!value) for (const w of BrowserWindow.getAllWindows()) if (!w.isVisible()) w.show()
+  // turning it off removes the tray icon — un-hide the window if it's tucked there so it isn't orphaned
+  if (!value && mainWindow && !mainWindow.isVisible()) mainWindow.show()
   syncTray()
   return value
 })
 
+// single-window app: a second launch must not spin up another instance/window — it just
+// reveals and focuses the one that's already running.
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) app.quit()
+
+app.on('second-instance', () => {
+  showWindow()
+})
+
 app.whenReady().then(() => {
+  if (!gotSingleInstanceLock) return
   registerKeychain()
   registerLlm()
   registerLuna()
@@ -186,6 +183,5 @@ app.on('window-all-closed', () => {
 })
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  else showAllWindows()
+  showWindow()
 })

@@ -316,7 +316,6 @@ declare global {
     minimize: () => void
     maximize: () => void
     close: () => void
-    newWindow: () => void
     system: {
       getCloseToTray: () => Promise<boolean>
       setCloseToTray: (on: boolean) => Promise<boolean>

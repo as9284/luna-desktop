@@ -435,17 +435,6 @@ export default function Settings() {
                     }}
                   />
                 </div>
-                <div className="pane-row">
-                  <div className="pane-row-txt">
-                    <span className="pane-row-label">Multiple windows</span>
-                    <span className="pane-row-hint">
-                      Open as many windows as you like — the title-bar “new window” button, or Ctrl+Shift+N.
-                    </span>
-                  </div>
-                  <Button variant="secondary" small onClick={() => window.api?.newWindow?.()}>
-                    New window
-                  </Button>
-                </div>
               </>
             )}
 
