@@ -16,11 +16,13 @@ Three modules orbit Luna, each a full workspace of its own:
   third-party search API): Luna searches the live web on its own whenever a question needs
   current information. She works with your files, too — reading documents (PDF, Word, Excel,
   PowerPoint), writing and organizing files in a sandboxed workspace, running code for exact
-  answers, seeing images, and designing polished documents she can export to PDF — with a
-  permission prompt on every write, delete, or code run. Luna can also act on your other
-  modules through tools — creating and updating Orbit tasks/notes/projects, and searching,
-  reading, and saving Atlas articles — directly from chat. Multi-thread history, all stored
-  locally.
+  answers, seeing images, and designing polished documents she can export to PDF. She works
+  freely inside her own workspace folder and asks first before writing outside it, deleting a
+  file, or running code. As she works, **every step — searching, reading, writing, running —
+  shows as a live animated trace** that folds into a compact, reopenable record on the reply.
+  Luna can also act on your other modules through tools — creating and updating Orbit
+  tasks/notes/projects, and searching, reading, and saving Atlas articles — directly from chat.
+  Multi-thread history, all stored locally.
 - **Orbit — your workspace.** Tasks, notes, and projects, plus **Meeting Mode** (capture
   raw notes and Luna turns them into a summary note, action-item tasks, and a grouping
   project) and a **Write** assistant (rewrite/proofread text in a chosen style).
@@ -38,6 +40,11 @@ Three modules orbit Luna, each a full workspace of its own:
   Atlas library (a local SQLite database) persist on this device. Your API key is encrypted
   at rest via the OS keychain (Electron `safeStorage`) — it never touches disk in plaintext
   or leaves your machine except to call the AI provider directly.
+- **Runs on virtually any model.** Point Luna at any OpenAI- or Anthropic-compatible endpoint.
+  A universal compatibility layer keeps tool-calling and reasoning working even on weaker or
+  open models — it rescues tool calls emitted as text (DeepSeek, Hermes/Qwen, and Mistral
+  dialects), keeps `<think>` reasoning out of the chat, and adapts requests to endpoints that
+  reject a parameter — so multi-step tool chains stay reliable across models.
 - **Keyless graceful degradation.** Saving, reading, searching, and highlighting in Atlas
   all work without an API key; AI features (summaries, synthesis, chat) light up once a key
   is set.
@@ -137,15 +144,17 @@ them in place.
 ```
 electron/          Main process — window, IPC, LLM providers, capabilities, web search, updater
   ipc/             keychain (encrypted keys), luna (chat + tool loop), meeting (summarizer)
-  llm/             Provider-agnostic LLM layer (OpenAI + Anthropic adapters, two model slots)
-  luna/            File/code/vision capabilities — sandboxed workspace, tools, extraction, PDF export
+  llm/             Provider-agnostic LLM layer (OpenAI + Anthropic adapters, two model slots) +
+                   universal-model compatibility (text-format tool calls, reasoning, request adaptation)
+  luna/            File/code/vision capabilities — sandboxed workspace, tools, extraction, PDF export,
+                   the activity-feedback core
   soul/            Luna's identity — editable soul, rules, skills, and memory
   atlas/           SQLite library — db (FTS5), extract (link-type router), digest (AI summaries)
   search/          Keyless web search + article extraction (readability → markdown)
   updater.ts       GitHub auto-update service
 src/
   views/           Home, Chat (Luna), Orbit, Atlas, Settings (+ Luna identity panel, doc viewers)
-  components/       Titlebar, Starfield, Updater, Markdown, Lightbox
+  components/       Titlebar, Starfield, Updater, Markdown, Lightbox, ProgressTrace (activity trace)
   store/            Zustand stores (chat, orbit, meetings, atlas, settings, ui)
   ui/               Design-system primitives (buttons, modals, context menu, …)
   lib/              Router + prompt helpers + Orbit tool executor

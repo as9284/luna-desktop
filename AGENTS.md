@@ -76,13 +76,16 @@ electron/
   ipc/             keychain (safeStorage-encrypted keys), luna (chat streaming + tool loop),
                    meeting (one-shot summarizer)
   llm/             Provider-agnostic LLM: config (slots main+vision), openai + anthropic
-                   adapters, index (streamChat / complete / describeImage)
+                   adapters, index (streamChat / complete / describeImage). Universal-model
+                   compat: toolText.ts (text-format tool-call dialects + reasoning strip +
+                   ReAct continuation), adapt.ts (400-driven request repair)
   luna/            Luna's capabilities:
     fs/            path guard, denylist, tiered permission policy, grants, file ops, activity log
     extract.ts     document → text (pdf/docx/xlsx/csv/…)
     sandbox.ts     locked-down JS execution (worker + vm, no I/O)
     pptx.ts        .pptx reader/renderer
     tools.ts       the file/code tool executor (pure) + tool schemas
+    activity.ts    tool → activity-step mapper + result classifier (pure) — drives the live trace
     index.ts       Electron wiring: singletons, permission round-trip, htmlToPdf, drawer IPC
   soul/            Luna's identity:
     defaults.ts    SOUL.md / AGENTS.md / skill text as constants (seeded to the workspace)
@@ -94,7 +97,8 @@ electron/
   search/          Keyless web search + extraction ladder
 src/
   views/           Home, Chat (Luna), Orbit, Atlas, Settings, SoulPanel, doc/ (Atlas viewers)
-  components/       Titlebar, Markdown, Updater, Starfield, Lightbox, …
+  components/       Titlebar, Markdown, Updater, Starfield, Lightbox, ProgressTrace + ActivityGlyph
+                   (the live/saved activity trace, activity.css), …
   store/            Zustand stores — chat, orbit, meetings, atlas, settings, ui
   ui/              Design-system primitives (Button, Modal, Segmented, Input, …)
   lib/             router (view transitions), luna-prompt, orbit-tools (renderer executor)
@@ -120,8 +124,13 @@ concept/           DESIGN.md (visual spec) + HTML prototypes
 - _Orbit / Atlas / soul tools:_ defined in `electron/ipc/luna.ts` (orbit/atlas) or
   `electron/soul/index.ts`; routed in the tool loop in `ipc/luna.ts`; user-facing results
   become inline cards via `buildCard`.
-- Every file/code tool goes through the tiered permission model — read = silent,
-  create/overwrite = ask-once-per-session, delete/run_code = confirm-always. Don't bypass it.
+- _Any tool:_ add a `case` to `stepFor` in `electron/luna/activity.ts` so it shows in the live
+  activity trace (a brand-new activity *kind* also needs a glyph in `src/components/ActivityGlyph.tsx`).
+- Every file/code tool goes through the path guard + tiered permission model. A bare/relative
+  path resolves against Luna's **workspace** (her default folder — see `GuardConfig.workspace`
+  in `fs/paths.ts`), not the process cwd. Tiers: read = silent; create/overwrite = **silent
+  inside the workspace** (her sandbox; overwrites are auto-backed-up) but **ask-once in a
+  granted folder**; delete/run_code = confirm-always, everywhere. Don't bypass it.
 
 **Change a Luna skill, her personality, or her rules**
 Edit `electron/soul/defaults.ts` (`DEFAULT_SKILLS`, `DEFAULT_SOUL`, `DEFAULT_AGENTS`) and update
@@ -131,9 +140,11 @@ install, the in-app **"Update built-in skills"** button, or a per-file **"Reset 
 
 **Style / design**
 Use the CSS variables from `src/index.css` — `--ink`, `--ink-2`, `--ink-3`, `--line`,
-`--line-2`, `--glass`, `--danger` — never hardcode colors. The one accent is `--danger` (a
-desaturated red), reserved for destructive/error only. Match the monochrome, instrument-grade
-look documented in `concept/DESIGN.md`.
+`--line-2`, `--glass`, `--accent` / `--accent-rgb`, `--danger` — never hardcode colors.
+`--danger` (a desaturated red) is reserved for destructive/error only; `--accent` is the
+themeable signature highlight (Luna's presence, the empty-page orb, the live activity trace),
+used sparingly. Motion is transform/opacity only, at 60fps, and must honor
+`prefers-reduced-motion`. Match the monochrome, instrument-grade look in `concept/DESIGN.md`.
 
 ---
 
@@ -167,13 +178,30 @@ look documented in `concept/DESIGN.md`.
   `.github/workflows/release.yml`.
 - **Datacenter IPs:** Reddit `.json` and a few endpoints 403 from CI/datacenter addresses;
   extraction degrades to a stub by design (works from residential IPs).
+- **Single-window app:** exactly one window exists — a `mainWindow` singleton in `electron/main.ts`
+  plus `app.requestSingleInstanceLock()` (a second launch just focuses it). `createWindow()`
+  reuses/reveals the existing window; don't reintroduce multi-window.
+- **Model tool calls as text:** weaker/open models emit tool calls as text, not native
+  `tool_calls`. `electron/llm/toolText.ts` rescues four dialects (Anthropic XML, DeepSeek DSML,
+  Hermes/Qwen, Mistral) and strips `<think>` reasoning; `streamChat` feeds text-dialect results
+  back as a ReAct observation (a user message, not a `tool` message) so weak models keep chaining.
+  Set `LUNA_LLM_DEBUG=1` before `npm run dev` to log each round's convo + parsed output when a
+  chain stalls. `electron/llm/adapt.ts` drops/reshapes a request param on a 400 and retries.
+- **Activity trace:** the tool loop emits structured `LunaStep` events over `luna:step:<id>`
+  (kind/label/target/detail + running→done/error), accumulated live and saved on the message.
+  Adding a tool? Add a `case` to `stepFor` in `electron/luna/activity.ts`; a new activity *kind*
+  also needs a glyph in `src/components/ActivityGlyph.tsx`.
+- **Composer auto-grow:** the chat textarea sizes itself from `scrollHeight` in an effect — it's
+  guarded against running while the view is `display:none` (a hidden route → `scrollHeight` 0 →
+  the box collapses and traps typing). Keep the `offsetParent` check + `min-height` (see
+  `src/views/Chat.tsx` and `.composer-input` in `chat.css`).
 
 ---
 
 ## Testing
 
 - `npm test` runs the backend suites headlessly: `fs`, `sandbox`, `extract`, `pptx`, `tools`,
-  `llm`, `soul`. They test pure logic with injected fakes — no Electron required.
+  `llm`, `soul`, `activity`. They test pure logic with injected fakes — no Electron required.
 - Anything needing Electron, a live API key, real streaming, the SQLite database, or PDF
   rendering can't be tested here — it's verified by running `npm run dev`, and the maintainer
   confirms it visually. Flag those in your handoff instead of asserting they work.
