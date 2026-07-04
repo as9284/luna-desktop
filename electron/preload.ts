@@ -58,9 +58,9 @@ contextBridge.exposeInMainWorld('api', {
   // meeting wrap-up: turn raw meeting notes into an organized note + tasks + project
   summarizeMeeting: (title: string, notes: string[]) => ipcRenderer.invoke('meeting:summarize', { title, notes }),
 
-  // streaming chat — onChunk is called per token, onStatus for transient state (e.g.
-  // "Searching the web…", cleared with null); resolves on done, rejects on error.
-  // Pass req.id to be able to cancel the request later via cancelChat(id).
+  // streaming chat — onChunk is called per token, onStep for each activity lifecycle event
+  // (a running/done/error step with a kind, label, target and sub-phase detail); resolves on
+  // done, rejects on error. Pass req.id to be able to cancel the request later via cancelChat(id).
   chat: (
     req: {
       id?: string
@@ -71,26 +71,26 @@ contextBridge.exposeInMainWorld('api', {
       identity?: boolean
     },
     onChunk: (token: string) => void,
-    onStatus?: (status: string | null) => void,
+    onStep?: (step: unknown) => void,
     onCard?: (card: unknown) => void,
   ) =>
     new Promise<void>((resolve, reject) => {
       const id = req.id ?? crypto.randomUUID()
       const chunkCh = `luna:chunk:${id}`
-      const statusCh = `luna:status:${id}`
+      const stepCh = `luna:step:${id}`
       const cardCh = `luna:card:${id}`
       const doneCh = `luna:done:${id}`
       const errCh = `luna:err:${id}`
       const onC = (_e: unknown, token: string) => onChunk(token)
-      const onS = (_e: unknown, status: string | null) => onStatus?.(status)
+      const onS = (_e: unknown, step: unknown) => onStep?.(step)
       const onCd = (_e: unknown, card: unknown) => onCard?.(card)
       const cleanup = () => {
         ipcRenderer.removeListener(chunkCh, onC)
-        ipcRenderer.removeListener(statusCh, onS)
+        ipcRenderer.removeListener(stepCh, onS)
         ipcRenderer.removeListener(cardCh, onCd)
       }
       ipcRenderer.on(chunkCh, onC)
-      ipcRenderer.on(statusCh, onS)
+      ipcRenderer.on(stepCh, onS)
       ipcRenderer.on(cardCh, onCd)
       ipcRenderer.once(doneCh, () => {
         cleanup()

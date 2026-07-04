@@ -73,6 +73,15 @@ ok('refuses `..` traversal escaping a root', !guardPath(path.join(granted, '..',
 ok('refuses an absolute system path', !guardPath(process.platform === 'win32' ? 'C:\\Windows\\system32\\x' : '/etc/passwd', cfg).ok)
 ok('refuses the denylisted userData dir even if asked directly', !guardPath(path.join(userData, 'luna-grants.json'), cfg).ok)
 
+section('Path guard — relative paths resolve to the workspace')
+{
+  const bare = guardPath('films-2025.md', cfg)
+  ok('a bare filename resolves inside the workspace, not the cwd', bare.ok && isInside(workspace, bare.real), JSON.stringify(bare))
+  const nested = guardPath('reports/q3.md', cfg)
+  ok('a relative subpath resolves inside the workspace', nested.ok && isInside(workspace, nested.real))
+  ok('a relative `..` escape out of the workspace is still refused', !guardPath('../escape/secret.txt', cfg).ok)
+}
+
 section('Path guard — secret filenames')
 ok('refuses id_rsa by name (even inside a root)', !guardPath(path.join(granted, 'id_rsa'), cfg).ok)
 ok('refuses a .env file', !guardPath(path.join(granted, '.env'), cfg).ok)

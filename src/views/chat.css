@@ -158,33 +158,10 @@
   line-height: 1.7;
   color: var(--ink);
 }
-.thinking {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-}
-.dots {
-  display: flex;
-  gap: 5px;
-  padding-left: 16px;
-  border-left: 1px solid rgba(var(--accent-rgb), 0.22);
-}
-.dots span {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--ink-2);
-  animation: blink 1.2s infinite;
-}
-.dots span:nth-child(2) { animation-delay: 0.2s; }
-.dots span:nth-child(3) { animation-delay: 0.4s; }
-.status-line {
-  font-family: var(--f-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--ink-2);
-  padding-left: 16px;
-  border-left: 1px solid rgba(var(--accent-rgb), 0.22);
+/* the streaming "working" turn reuses the luna turn layout (avatar + voice column); the live
+   activity trace inside it is styled in src/components/activity.css */
+.turn--working {
+  min-height: 27px;
 }
 
 /* ---------- composer ---------- */
@@ -199,9 +176,20 @@
   transform: none;
   width: 100%;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 6px;
   padding-left: 8px;
+}
+.composer-input {
+  resize: none;
+  overflow-y: hidden;
+  max-height: 168px;
+  min-height: 32px;
+  line-height: 1.4;
+  padding: 6px 0;
+  /* JS auto-grows the height from one row and flips overflow to auto past max-height. The grow is
+     skipped while the view is display:none (scrollHeight is 0 then); min-height keeps the box a
+     usable single line until the grow runs, so it never collapses and traps typing. */
 }
 .dock-attach {
   width: 34px;
@@ -444,7 +432,9 @@
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 16px;
-  background: var(--glass);
+  /* solid, elevated surface — not translucent glass, so the chat behind never bleeds through
+     and file content reads cleanly */
+  background: #0b0d12;
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
 }
 .fp-bar {
@@ -485,6 +475,15 @@
 .fp-btn:hover {
   color: var(--ink);
   background: rgba(255, 255, 255, 0.06);
+}
+/* markdown-view toggle, active when the formatted view is on */
+.fp-btn--on {
+  color: var(--ink);
+  background: rgba(var(--accent-rgb), 0.12);
+  border-color: rgba(var(--accent-rgb), 0.26);
+}
+.fp-btn--on:hover {
+  background: rgba(var(--accent-rgb), 0.18);
 }
 .fp-zoom {
   min-width: 40px;
@@ -537,6 +536,14 @@
   font-size: 12.5px;
   line-height: 1.6;
   color: var(--ink-2);
+}
+/* rendered markdown view of a text file — reuses the .md typography, centered for readability */
+.fp-md {
+  padding: 22px 26px 40px;
+}
+.fp-md .md {
+  max-width: 760px;
+  margin: 0 auto;
 }
 
 /* ---------- inline permission cards ---------- */
@@ -920,49 +927,94 @@
 }
 
 .scroll::-webkit-scrollbar,
-.drawer-scroll::-webkit-scrollbar {
+.drawer-scroll::-webkit-scrollbar,
+.composer-input::-webkit-scrollbar {
   width: 10px;
 }
 .scroll::-webkit-scrollbar-thumb,
-.drawer-scroll::-webkit-scrollbar-thumb {
+.drawer-scroll::-webkit-scrollbar-thumb,
+.composer-input::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 999px;
   border: 3px solid transparent;
   background-clip: content-box;
 }
 .scroll::-webkit-scrollbar-thumb:hover,
-.drawer-scroll::-webkit-scrollbar-thumb:hover {
+.drawer-scroll::-webkit-scrollbar-thumb:hover,
+.composer-input::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.22);
   background-clip: content-box;
 }
 
 .chat-empty {
   margin: auto;
-  text-align: center;
-  padding: 60px 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+  display: grid;
+  place-items: center;
+  padding: 40px 0;
 }
-.chat-empty-orb {
-  width: 46px;
-  height: 46px;
+
+/* Luna's presence — a large luminous 3D orb. Four stacked layers: a breathing halo, a lit
+   sphere body (bright off-center highlight → accent midtone → dark limb for roundness), a soft
+   plasma haze that turns slowly across it, and a fixed specular highlight. Motion is
+   transform/opacity only, so it holds 60fps. */
+.orb {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  display: grid;
+  place-items: center;
+  animation: orbBreathe 6s ease-in-out infinite;
+}
+.orb-glow {
+  position: absolute;
+  width: 152%;
+  height: 152%;
   border-radius: 50%;
-  background: radial-gradient(circle at 36% 30%, #fff, var(--accent) 55%, #6c7180);
-  box-shadow: 0 0 26px 4px rgba(var(--accent-rgb), 0.4);
-  margin-bottom: 6px;
-  animation: breathe 4s ease-in-out infinite;
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.34), rgba(var(--accent-rgb), 0.08) 46%, transparent 68%);
+  filter: blur(6px);
+  animation: orbGlow 5s ease-in-out infinite;
 }
-.chat-empty h2 {
-  font-family: var(--f-disp);
-  font-weight: 500;
-  font-size: 20px;
-  color: var(--ink);
+.orb-body {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(circle at 38% 32%, #ffffff, #eef1f8 10%, var(--accent) 40%, #3b4049 74%, #14171d 100%);
+  box-shadow:
+    inset -14px -18px 42px rgba(0, 0, 0, 0.55),
+    inset 10px 12px 30px rgba(255, 255, 255, 0.14),
+    0 0 62px 8px rgba(var(--accent-rgb), 0.26);
 }
-.chat-empty p {
-  font-size: 14px;
-  color: var(--ink-2);
+.orb-surface {
+  position: absolute;
+  inset: -25%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.42), transparent 46%),
+    radial-gradient(circle at 66% 62%, rgba(var(--accent-rgb), 0.45), transparent 48%),
+    radial-gradient(circle at 50% 80%, rgba(255, 255, 255, 0.2), transparent 45%);
+  filter: blur(10px);
+  opacity: 0.62;
+  animation: orbSpin 26s linear infinite;
+}
+.orb-spec {
+  position: absolute;
+  top: 19%;
+  left: 25%;
+  width: 26%;
+  height: 20%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.92), transparent 70%);
+  filter: blur(3px);
+}
+
+@keyframes orbBreathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+@keyframes orbGlow { 0%, 100% { opacity: 0.68; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
+@keyframes orbSpin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .orb, .orb-glow, .orb-surface { animation: none; }
 }
 
 /* ---------- markdown in Luna's messages ---------- */
@@ -1126,9 +1178,4 @@
   border-radius: 10px;
   max-width: 90%;
   text-align: center;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 0.2; transform: translateY(0); }
-  50% { opacity: 1; transform: translateY(-2px); }
 }

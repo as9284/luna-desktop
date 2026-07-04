@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { guardPath, type GuardConfig } from './fs/paths'
+import { guardPath, isInside, type GuardConfig } from './fs/paths'
 import { needsApproval, describe, classify, type FsAction, type Tier } from './fs/policy'
 import type { FsOps } from './fs/ops'
 import type { ExtractResult } from './extract'
@@ -44,6 +44,12 @@ export interface ToolCtx {
 
 const clip = (s: string, n = 2000) => (s.length > n ? s.slice(0, n) + '…' : s)
 
+/** True when a write target resolves inside Luna's own workspace (her auto-approved sandbox). */
+const inWorkspace = (p: string, cfg: GuardConfig): boolean => {
+  const g = guardPath(p, cfg)
+  return g.ok && isInside(cfg.workspace, g.real)
+}
+
 export function createFileTools(deps: FileToolDeps) {
   const run = async (name: string, argsJson: string, ctx: ToolCtx): Promise<string> => {
     let args: Record<string, unknown> = {}
@@ -66,7 +72,7 @@ export function createFileTools(deps: FileToolDeps) {
           deps.activity.push({ action: 'read', target: p, ok: false, detail: g.error })
           return JSON.stringify({ error: g.error })
         }
-        ctx.status('Reading a file…')
+        ctx.status('extracting…')
         const ex = await deps.extract(g.real)
         deps.activity.push({ action: 'read', target: g.real, ok: ex.ok, detail: ex.ok ? ex.kind : ex.error })
         ctx.status(null)
@@ -83,7 +89,7 @@ export function createFileTools(deps: FileToolDeps) {
           deps.activity.push({ action: 'read', target: p, ok: false, detail: g.error })
           return JSON.stringify({ error: g.error })
         }
-        ctx.status('Looking at the image…')
+        ctx.status('reading the image…')
         const v = await deps.analyzeImage(g.real, str('question'))
         deps.activity.push({ action: 'read', target: g.real, ok: v.ok, detail: v.ok ? 'image' : v.error })
         ctx.status(null)
@@ -93,7 +99,7 @@ export function createFileTools(deps: FileToolDeps) {
       case 'list_dir': {
         const p = str('path')
         if (!p) return JSON.stringify({ error: 'path is required.' })
-        ctx.status('Browsing a folder…')
+        ctx.status('listing…')
         const r = await deps.ops.listDir(p)
         ctx.status(null)
         return JSON.stringify(r)
@@ -107,7 +113,8 @@ export function createFileTools(deps: FileToolDeps) {
           const g = guardPath(p, deps.guard())
           return JSON.stringify({ error: g.ok ? 'Cannot write there.' : g.error })
         }
-        if (needsApproval(kind, 'write', deps.approvedOnce)) {
+        if (needsApproval(kind, 'write', deps.approvedOnce, inWorkspace(p, deps.guard()))) {
+          ctx.status('awaiting your approval…')
           const approved = await deps.requestPermission({
             action: kind,
             target: path.basename(p),
@@ -131,12 +138,13 @@ export function createFileTools(deps: FileToolDeps) {
           const g = guardPath(p, deps.guard())
           return JSON.stringify({ error: g.ok ? 'Cannot write there.' : g.error })
         }
-        if (needsApproval(kind, 'write', deps.approvedOnce)) {
+        if (needsApproval(kind, 'write', deps.approvedOnce, inWorkspace(p, deps.guard()))) {
+          ctx.status('awaiting your approval…')
           const approved = await deps.requestPermission({ action: kind, target: path.basename(p), detail: 'PDF document', signal: ctx.signal })
           if (!approved) return JSON.stringify({ error: 'The user declined this export.' })
           deps.approvedOnce.add('write')
         }
-        ctx.status('Rendering the PDF…')
+        ctx.status('rendering…')
         let bytes: Uint8Array
         try {
           bytes = await deps.renderPdf(html)
@@ -155,6 +163,7 @@ export function createFileTools(deps: FileToolDeps) {
         if (!p) return JSON.stringify({ error: 'path is required.' })
         const g = guardPath(p, deps.guard())
         if (!g.ok) return JSON.stringify({ error: g.error }) // refuse before prompting
+        ctx.status('awaiting your approval…')
         const approved = await deps.requestPermission({ action: 'delete', target: path.basename(p), signal: ctx.signal })
         if (!approved) return JSON.stringify({ error: 'The user declined the deletion.' })
         const r = await deps.ops.deleteFile(p)
@@ -164,6 +173,7 @@ export function createFileTools(deps: FileToolDeps) {
       case 'run_code': {
         const code = str('code')
         if (!code) return JSON.stringify({ error: 'code is required.' })
+        ctx.status('awaiting your approval…')
         const approved = await deps.requestPermission({
           action: 'run_code',
           target: 'a snippet',
@@ -171,7 +181,7 @@ export function createFileTools(deps: FileToolDeps) {
           signal: ctx.signal,
         })
         if (!approved) return JSON.stringify({ error: 'The user declined to run this code.' })
-        ctx.status('Running code…')
+        ctx.status('executing…')
         const r = await deps.runCode(code)
         deps.activity.push({ action: 'run_code', target: 'snippet', ok: r.ok, detail: r.ok ? undefined : r.error })
         ctx.status(null)

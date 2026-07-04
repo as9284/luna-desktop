@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ZoomIn, ZoomOut, Maximize2, FolderOpen, X } from 'lucide-react'
+import { ZoomIn, ZoomOut, Maximize2, FolderOpen, X, Code2, Eye } from 'lucide-react'
 import PdfView from './doc/PdfView'
+import Markdown from '../components/Markdown'
 import './doc/doc.css'
 
 interface Loaded {
@@ -21,6 +22,7 @@ export default function FilePreview({ path, onClose }: { path: string; onClose: 
   const [data, setData] = useState<Loaded | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [scale, setScale] = useState(1)
+  const [rawView, setRawView] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -63,6 +65,7 @@ export default function FilePreview({ path, onClose }: { path: string; onClose: 
   const zoom = (d: number) => setScale((s) => Math.min(4, Math.max(0.4, Math.round((s + d) * 10) / 10)))
   const noop = useCallback(() => {}, [])
   const canZoom = data?.kind === 'pdf' || data?.kind === 'image'
+  const isMarkdown = data?.kind === 'text' && /\.(md|markdown|mdx)$/i.test(data?.name ?? path)
 
   return (
     <div className="fp-veil" onMouseDown={onClose}>
@@ -77,6 +80,16 @@ export default function FilePreview({ path, onClose }: { path: string; onClose: 
                 <button className="fp-btn" onClick={() => zoom(0.2)} title="Zoom in"><ZoomIn size={15} /></button>
                 <button className="fp-btn" onClick={() => setScale(1)} title="Fit"><Maximize2 size={14} /></button>
               </>
+            )}
+            {isMarkdown && (
+              <button
+                className={'fp-btn' + (rawView ? '' : ' fp-btn--on')}
+                onClick={() => setRawView((r) => !r)}
+                aria-pressed={!rawView}
+                title={rawView ? 'Show formatted markdown' : 'Show raw source'}
+              >
+                {rawView ? <Eye size={15} /> : <Code2 size={15} />}
+              </button>
             )}
             <button className="fp-btn" onClick={reveal} title="Reveal in folder"><FolderOpen size={15} /></button>
             <button className="fp-btn" onClick={onClose} title="Close (Esc)"><X size={16} /></button>
@@ -105,6 +118,10 @@ export default function FilePreview({ path, onClose }: { path: string; onClose: 
           ) : data.kind === 'image' && data.url ? (
             <div className="fp-image-host">
               <img className="fp-image" src={data.url} alt={data.name} style={scale === 1 ? undefined : { width: `${scale * 100}%`, maxWidth: 'none' }} />
+            </div>
+          ) : isMarkdown && !rawView ? (
+            <div className="fp-md">
+              <Markdown content={data.text ?? ''} />
             </div>
           ) : (
             <pre className="fp-text">{data.text}</pre>

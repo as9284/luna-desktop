@@ -20,6 +20,7 @@ import { createFileTools, LUNA_FS_TOOLS, LUNA_FS_TOOL_NAMES } from './tools'
  */
 
 export { LUNA_FS_TOOLS, LUNA_FS_TOOL_NAMES }
+export { stepFor, outcomeOf, type LunaStep, type ActivityKind, type StepState } from './activity'
 
 let store: GrantStore | null = null
 let ops: FsOps | null = null
@@ -162,7 +163,7 @@ async function extractOrSee(real: string): Promise<ExtractResult> {
 async function readAttachment(p: string): Promise<Attachment> {
   init()
   const real = realOf(p)
-  const g = guardPath(real, { roots: [path.dirname(real)], denylist: store!.guardConfig().denylist })
+  const g = guardPath(real, { roots: [path.dirname(real)], denylist: store!.guardConfig().denylist, workspace: path.dirname(real) })
   if (!g.ok) {
     activity!.push({ action: 'attach', target: p, ok: false, detail: g.error })
     return { name: path.basename(p), path: p, error: g.error }
@@ -225,7 +226,7 @@ export async function readForAtlas(inputPath: string, opts: { picked?: boolean }
   init()
   const real = realOf(inputPath)
   const guard = opts.picked
-    ? guardPath(real, { roots: [path.dirname(real)], denylist: store!.guardConfig().denylist })
+    ? guardPath(real, { roots: [path.dirname(real)], denylist: store!.guardConfig().denylist, workspace: path.dirname(real) })
     : guardPath(inputPath, store!.guardConfig())
   if (!guard.ok) return { ok: false, error: guard.error }
   const ex = await extractOrSee(guard.real)
@@ -291,10 +292,10 @@ async function readOutput(input: string): Promise<PreviewResult> {
 export async function runLunaFsTool(
   name: string,
   argsJson: string,
-  ctx: { event: IpcMainEvent; signal: AbortSignal; statusCh: string },
+  ctx: { event: IpcMainEvent; signal: AbortSignal; onDetail: (phase: string | null) => void },
 ): Promise<string> {
   init()
-  const { event, signal, statusCh } = ctx
+  const { event, signal, onDetail } = ctx
   // one executor instance per request so requestPermission/folder-picker bind to this window
   tools = createFileTools({
     guard: () => store!.guardConfig(),
@@ -313,7 +314,7 @@ export async function runLunaFsTool(
     workspaceInfo,
     approvedOnce,
   })
-  return tools.run(name, argsJson, { status: (s) => event.sender.send(statusCh, s), signal })
+  return tools.run(name, argsJson, { status: onDetail, signal })
 }
 
 /* ---------------- renderer-facing IPC (edge drawer) ---------------- */

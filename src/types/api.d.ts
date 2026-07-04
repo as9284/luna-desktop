@@ -185,6 +185,21 @@ declare global {
     fileType?: string
   }
 
+  /** kind of work a processing step represents — selects its animated glyph */
+  type LunaStepKind =
+    | 'search' | 'web' | 'read' | 'browse' | 'image' | 'write' | 'pdf' | 'code'
+    | 'delete' | 'save' | 'highlight' | 'task' | 'note' | 'project'
+    | 'skill' | 'memory' | 'think'
+  /** a single activity Luna performs while working a turn — streamed live, saved as a trace */
+  interface LunaStep {
+    id: string
+    kind: LunaStepKind
+    state: 'running' | 'done' | 'error' | 'awaiting'
+    label: string
+    target?: string
+    detail?: string
+  }
+
   type SoulFile = 'soul' | 'agents' | 'memory'
   interface LunaProfile {
     name: string
@@ -315,7 +330,7 @@ declare global {
     chat: (
       req: { id?: string; messages: ChatMessage[]; temperature?: number; tools?: boolean; research?: boolean; identity?: boolean },
       onChunk: (token: string) => void,
-      onStatus?: (status: string | null) => void,
+      onStep?: (step: LunaStep) => void,
       onCard?: (card: LunaChatCard) => void,
     ) => Promise<void>
     cancelChat: (id: string) => void

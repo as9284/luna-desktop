@@ -55,6 +55,9 @@ export interface GuardConfig {
   roots: string[]
   /** absolute, realpath-resolved paths that are always off-limits */
   denylist: string[]
+  /** the Luna workspace root — a bare/relative path is resolved against this (Luna's default
+   *  folder), not the process working directory */
+  workspace: string
 }
 
 export type GuardResult = { ok: true; real: string } | { ok: false; error: string }
@@ -66,7 +69,10 @@ export type GuardResult = { ok: true; real: string } | { ok: false; error: strin
 export function guardPath(input: string, cfg: GuardConfig): GuardResult {
   if (!input || typeof input !== 'string') return { ok: false, error: 'No path provided.' }
 
-  const real = realOf(input)
+  // A bare or relative path is workspace-relative — Luna works in her folder by default, so
+  // "films-2025.md" means "<workspace>/films-2025.md", not "<process cwd>/films-2025.md".
+  const resolvedInput = path.isAbsolute(input) ? input : path.join(cfg.workspace, input)
+  const real = realOf(resolvedInput)
 
   // denylist beats everything, including an explicit grant
   for (const denied of cfg.denylist) {

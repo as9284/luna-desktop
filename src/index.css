@@ -209,7 +209,8 @@ body {
   background: radial-gradient(circle at 36% 30%, #fff, var(--accent) 55%, #6c7180);
   box-shadow: 0 0 10px 1px rgba(var(--accent-rgb), 0.6);
 }
-.dock input {
+.dock input,
+.dock textarea {
   flex: 1;
   background: none;
   border: 0;
@@ -218,7 +219,8 @@ body {
   font-family: var(--f-body);
   font-size: 14.5px;
 }
-.dock input::placeholder {
+.dock input::placeholder,
+.dock textarea::placeholder {
   color: var(--ink-2);
 }
 .dock .send {

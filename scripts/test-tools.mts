@@ -32,11 +32,13 @@ const home = path.join(ROOT, 'home')
 const userData = path.join(ROOT, 'userData')
 const documents = path.join(home, 'Documents')
 const outside = path.join(home, 'outside')
-for (const d of [home, userData, documents, outside]) fs.mkdirSync(d, { recursive: true })
+const granted = path.join(home, 'granted') // an explicitly granted folder (writes there still ask-once)
+for (const d of [home, userData, documents, outside, granted]) fs.mkdirSync(d, { recursive: true })
 fs.writeFileSync(path.join(outside, 'secret.txt'), 'nope')
 
 const store = createGrantStore({ home, userData, documents })
 const workspace = store.ensureWorkspace()
+store.add(granted)
 fs.writeFileSync(path.join(workspace, 'readme.md'), '# Hello Luna\nThis is a file.')
 const trashDir = path.join(ROOT, 'trash')
 fs.mkdirSync(trashDir)
@@ -80,36 +82,52 @@ section('read_file — silent, guarded')
   ok('reading outside every root is refused', !!out.error, JSON.stringify(out))
 }
 
-// ---- write: ask-once, then remembered ------------------------------------
-section('write_file — ask-once, remembered, guarded')
+// ---- write: silent in the workspace, ask-once in a granted folder --------
+section('write_file — workspace auto-approved, granted-folder ask-once, guarded')
 {
+  // a write inside Luna's workspace is auto-approved — no prompt
+  asked.length = 0
+  decision = true
+  const t1 = path.join(workspace, 'out1.txt')
+  const r1 = JSON.parse(await makeTools().run('write_file', JSON.stringify({ path: t1, content: 'one' }), ctx))
+  ok('a workspace write is auto-approved (no prompt)', asked.length === 0, `asked=${asked.length}`)
+  ok('the workspace file is written', r1.ok && fs.readFileSync(t1, 'utf8') === 'one')
+}
+{
+  // a bare/relative filename resolves to the workspace (not the process cwd) and is auto-approved
+  asked.length = 0
+  const r = JSON.parse(await makeTools().run('write_file', JSON.stringify({ path: 'films-2025.md', content: '# films' }), ctx))
+  ok('a bare filename writes into the workspace', r.ok && fs.existsSync(path.join(workspace, 'films-2025.md')), JSON.stringify(r))
+  ok('…without a prompt', asked.length === 0)
+}
+{
+  // overwrite in the workspace: silent, but still backed up (recoverable)
+  asked.length = 0
+  const t = path.join(workspace, 'over.txt')
+  fs.writeFileSync(t, 'old')
+  const r = JSON.parse(await makeTools().run('write_file', JSON.stringify({ path: t, content: 'new' }), ctx))
+  ok('overwrite reports action=overwrite with a backup', r.ok && r.action === 'overwrite' && !!r.backup, JSON.stringify(r))
+  ok('the backup holds the old content', fs.readFileSync(r.backup, 'utf8') === 'old')
+  ok('no prompt for a workspace overwrite', asked.length === 0)
+}
+{
+  // a granted folder (not the workspace) still asks once, then remembers for the session
   asked.length = 0
   decision = true
   const shared = new Set<string>()
   const tools = makeTools(shared)
-  const t1 = path.join(workspace, 'out1.txt')
-  const r1 = JSON.parse(await tools.run('write_file', JSON.stringify({ path: t1, content: 'one' }), ctx))
-  ok('first create prompts once', asked.length === 1 && asked[0].action === 'create', JSON.stringify(asked))
-  ok('the file is written after approval', r1.ok && fs.readFileSync(t1, 'utf8') === 'one')
+  const g1 = path.join(granted, 'g1.txt')
+  const r1 = JSON.parse(await tools.run('write_file', JSON.stringify({ path: g1, content: 'one' }), ctx))
+  ok('first granted-folder write prompts once', asked.length === 1 && asked[0].action === 'create', JSON.stringify(asked))
+  ok('the granted-folder file is written after approval', r1.ok && fs.readFileSync(g1, 'utf8') === 'one')
 
-  const t2 = path.join(workspace, 'out2.txt')
-  const r2 = JSON.parse(await tools.run('write_file', JSON.stringify({ path: t2, content: 'two' }), ctx))
-  ok('a second write does NOT prompt again (ask-once remembered)', asked.length === 1, `asked=${asked.length}`)
-  ok('the second file is written', r2.ok && fs.readFileSync(t2, 'utf8') === 'two')
+  const g2 = path.join(granted, 'g2.txt')
+  const r2 = JSON.parse(await tools.run('write_file', JSON.stringify({ path: g2, content: 'two' }), ctx))
+  ok('a second granted-folder write does NOT prompt again (ask-once remembered)', asked.length === 1, `asked=${asked.length}`)
+  ok('the second granted-folder file is written', r2.ok && fs.readFileSync(g2, 'utf8') === 'two')
 }
 {
-  // overwrite makes a backup
-  asked.length = 0
-  const t = path.join(workspace, 'over.txt')
-  fs.writeFileSync(t, 'old')
-  const tools = makeTools(new Set(['write'])) // pretend already approved this session
-  const r = JSON.parse(await tools.run('write_file', JSON.stringify({ path: t, content: 'new' }), ctx))
-  ok('overwrite reports action=overwrite with a backup', r.ok && r.action === 'overwrite' && !!r.backup, JSON.stringify(r))
-  ok('the backup holds the old content', fs.readFileSync(r.backup, 'utf8') === 'old')
-  ok('no prompt when write already remembered', asked.length === 0)
-}
-{
-  // outside a root: refused BEFORE any prompt
+  // outside every root: refused BEFORE any prompt
   asked.length = 0
   const out = JSON.parse(await makeTools().run('write_file', JSON.stringify({ path: path.join(outside, 'evil.txt'), content: 'x' }), ctx))
   ok('writing outside a root is refused', !!out.error)
@@ -117,12 +135,12 @@ section('write_file — ask-once, remembered, guarded')
   ok('…and nothing is written', !fs.existsSync(path.join(outside, 'evil.txt')))
 }
 {
-  // decline → nothing written
+  // decline in a granted folder → nothing written
   asked.length = 0
   decision = false
-  const t = path.join(workspace, 'declined.txt')
+  const t = path.join(granted, 'declined.txt')
   const out = JSON.parse(await makeTools().run('write_file', JSON.stringify({ path: t, content: 'x' }), ctx))
-  ok('a declined write returns an error', !!out.error && /declined/i.test(out.error))
+  ok('a declined granted-folder write returns an error', !!out.error && /declined/i.test(out.error))
   ok('a declined write creates no file', !fs.existsSync(t))
   decision = true
 }
@@ -134,7 +152,7 @@ section('export_pdf — render → guarded binary write')
   decision = true
   const t = path.join(workspace, 'doc.pdf')
   const out = JSON.parse(await makeTools().run('export_pdf', JSON.stringify({ path: t, html: '<h1>Hi</h1>' }), ctx))
-  ok('export prompts once (create tier) then writes the pdf', asked.length === 1 && out.ok && fs.existsSync(t), JSON.stringify(out))
+  ok('a workspace export is auto-approved and writes the pdf', asked.length === 0 && out.ok && fs.existsSync(t), JSON.stringify(out))
   ok('the written file holds the rendered bytes', fs.readFileSync(t, 'utf8').startsWith('%PDF'))
 }
 {
@@ -143,9 +161,10 @@ section('export_pdf — render → guarded binary write')
   ok('exporting outside a root is refused before prompting', !!out.error && asked.length === 0)
 }
 {
+  // decline in a granted folder (workspace exports don't prompt, so test the prompt path here)
   asked.length = 0
   decision = false
-  const t = path.join(workspace, 'declined.pdf')
+  const t = path.join(granted, 'declined.pdf')
   const out = JSON.parse(await makeTools().run('export_pdf', JSON.stringify({ path: t, html: '<p>x</p>' }), ctx))
   ok('a declined export writes nothing', !!out.error && !fs.existsSync(t))
   decision = true

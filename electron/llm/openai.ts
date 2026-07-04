@@ -1,4 +1,5 @@
 import { readEventStream } from './sse'
+import { adaptivePost } from './adapt'
 import { endpointOf, type ChatMsg, type ContentPart, type ModelConfig, type StreamResult, type ToolCall, type ToolDef } from './config'
 
 /** OpenAI-compatible adapter (OpenAI, DeepSeek, OpenRouter, Together, Ollama, LM Studio, …). */
@@ -22,18 +23,8 @@ function toMessages(convo: ChatMsg[]): unknown[] {
   })
 }
 
-async function post(cfg: ModelConfig, key: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
-  const res = await fetch(endpointOf(cfg), {
-    method: 'POST',
-    signal,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`${res.status}: ${text.slice(0, 300) || res.statusText}`)
-  }
-  return res
+function post(cfg: ModelConfig, key: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
+  return adaptivePost(endpointOf(cfg), { Authorization: `Bearer ${key}` }, body, `${cfg.baseUrl}::${cfg.model}`, signal)
 }
 
 function mergeToolCallDelta(
@@ -88,6 +79,12 @@ export async function streamOpenAI(
     } catch {
       // partial SSE frame — wait for more
     }
+  })
+
+  // Some providers stream native tool_calls without ids. An empty id can't be matched to its
+  // tool result, so a model ignores the result (or loops). Synthesize stable, unique ids.
+  toolCalls.forEach((c, i) => {
+    if (!c.id) c.id = `call_${i}`
   })
 
   return { content, toolCalls, finishReason }

@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Paperclip, PanelLeft, Search, Plus, ChevronLeft, X, FolderPlus, FolderOpen,
   Trash2, FileText, Terminal, FilePen, ShieldAlert, Eye, FolderSearch, Library, Orbit as OrbitIcon, Pencil,
 } from 'lucide-react'
 import Starfield from '../components/Starfield'
 import Markdown, { CopyButton, plainTextFrom } from '../components/Markdown'
+import { ProgressTrace, SavedTrace } from '../components/ProgressTrace'
 import Lightbox from '../components/Lightbox'
 import FilePreview from './FilePreview'
 import { goHome, navigateTo } from '../lib/router'
@@ -111,6 +112,7 @@ function LunaTurn({ m, onOpenFile }: { m: Msg; onOpenFile: (path: string) => voi
         className="voice"
         onContextMenu={(e) => openContextMenu(e, [{ label: 'Copy message', onSelect: copyMessage }])}
       >
+        {!!m.trace?.length && <SavedTrace steps={m.trace} />}
         {m.content && (
           <div ref={bodyRef}>
             <Markdown content={m.content} saveLinks />
@@ -137,7 +139,7 @@ export default function Chat() {
   const threads = useChat((s) => s.threads)
   const activeId = useChat((s) => s.activeId)
   const streamingByThread = useChat((s) => s.streamingByThread)
-  const statusByThread = useChat((s) => s.statusByThread)
+  const stepsByThread = useChat((s) => s.stepsByThread)
   const errorByThread = useChat((s) => s.errorByThread)
   const unreadIds = useChat((s) => s.unreadIds)
   const send = useChat((s) => s.send)
@@ -151,7 +153,7 @@ export default function Chat() {
   const sortedThreads = [...threads].sort((a, b) => b.updatedAt - a.updatedAt)
 
   const streaming = !!streamingByThread[activeId]
-  const status = statusByThread[activeId] ?? null
+  const liveSteps = stepsByThread[activeId] ?? []
   const error = errorByThread[activeId] ?? null
   const ambient = useSettings((s) => s.ambient)
 
@@ -171,7 +173,7 @@ export default function Chat() {
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
-  const composerRef = useRef<HTMLInputElement>(null)
+  const composerRef = useRef<HTMLTextAreaElement>(null)
   const stickToBottom = useRef(true)
   const dragDepth = useRef(0)
 
@@ -314,8 +316,26 @@ export default function Chat() {
     setGrants((prev) => prev.filter((g) => g.id !== id))
   }
 
+  // Grow the composer with its content, up to a max then scroll. Skip while the view is hidden
+  // (display:none → scrollHeight 0), which would otherwise pin height at 0 and trap typing — the
+  // CSS min-height keeps it a usable single line until the grow can run visibly.
+  const autoGrow = useCallback(() => {
+    const el = composerRef.current
+    if (!el || el.offsetParent === null) return
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 168) + 'px'
+    el.style.overflowY = el.scrollHeight > 168 ? 'auto' : 'hidden'
+  }, [])
+  useEffect(() => { autoGrow() }, [input, autoGrow])
+
   const last = messages[messages.length - 1]
-  const showThinking = streaming && last?.role === 'assistant' && !last.content
+  const runningStep = liveSteps.find((s) => s.state === 'running' || s.state === 'awaiting')
+  // "thinking" is the composing gap: streaming, nothing running, and no answer text yet
+  const thinking = streaming && !runningStep && !(last?.role === 'assistant' && last.content)
+  // show the live trace while working, but not once the final answer is streaming (it reappears
+  // as the saved trace on the finished message) — avoids the trace sitting below the answer
+  const showLive = streaming && (!!runningStep || thinking)
+  const presenceLabel = runningStep ? runningStep.label : streaming ? 'Thinking…' : 'Luna'
   const canSend = (input.trim() || attachments.some((a) => a.text)) && !streaming
   const lastUserIdx = messages.map((m) => m.role).lastIndexOf('user')
 
@@ -349,7 +369,7 @@ export default function Chat() {
         <button className="ghost-btn" onClick={() => { setDrawerTab('chats'); setDrawerOpen(true) }} title="History (Ctrl+K)" aria-label="History">
           <PanelLeft size={18} />
         </button>
-        <span className="stage-presence"><span className="presence" />{streaming ? status ?? 'thinking…' : 'Luna'}</span>
+        <span className="stage-presence"><span className="presence" />{presenceLabel}</span>
       </div>
 
       <main className="stage">
@@ -364,14 +384,18 @@ export default function Chat() {
           <div className="thread-col">
             {messages.length === 0 && (
               <div className="chat-empty">
-                <div className="chat-empty-orb" />
-                <h2>Ask Luna anything</h2>
-                <p>Read files, run code, or just talk. Everything stays on this device.</p>
+                <div className="orb" aria-hidden="true">
+                  <div className="orb-glow" />
+                  <div className="orb-body">
+                    <div className="orb-surface" />
+                    <div className="orb-spec" />
+                  </div>
+                </div>
               </div>
             )}
 
             {messages.map((m, i) =>
-              m.role === 'assistant' && m.content === '' && !m.cards?.length ? null : m.role === 'user' ? (
+              m.role === 'assistant' && m.content === '' && !m.cards?.length && !m.trace?.length ? null : m.role === 'user' ? (
                 <div key={m.id} className="turn turn--user">
                   <div className="user-stack">
                     {!!m.attachments?.length && (
@@ -414,14 +438,10 @@ export default function Chat() {
               ),
             )}
 
-            {showThinking && (
-              <div className="thinking">
+            {showLive && (
+              <div className="turn turn--luna turn--working">
                 <span className="av" />
-                {status ? (
-                  <span className="status-line">{status}</span>
-                ) : (
-                  <div className="dots"><span /><span /><span /></div>
-                )}
+                <ProgressTrace steps={liveSteps} thinking={thinking} />
               </div>
             )}
 
@@ -472,14 +492,30 @@ export default function Chat() {
             <button className="dock-attach" onClick={doAttach} title="Attach files" aria-label="Attach files">
               <Paperclip size={17} />
             </button>
-            <input
+            <textarea
               ref={composerRef}
+              className="composer-input"
               placeholder="Message Luna…"
+              rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              onFocus={autoGrow}
               onPaste={onPaste}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') submit()
+                if (e.key !== 'Enter') return
+                // Ctrl/Cmd+Enter inserts a newline; plain Enter sends.
+                if (e.ctrlKey || e.metaKey) {
+                  e.preventDefault()
+                  const el = e.currentTarget
+                  const start = el.selectionStart
+                  const end = el.selectionEnd
+                  setInput((v) => v.slice(0, start) + '\n' + v.slice(end))
+                  requestAnimationFrame(() => el.setSelectionRange(start + 1, start + 1))
+                  return
+                }
+                if (e.shiftKey) return // let the textarea insert a newline natively
+                e.preventDefault()
+                submit()
               }}
             />
             {streaming ? (

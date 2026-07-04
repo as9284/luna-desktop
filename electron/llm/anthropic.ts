@@ -1,4 +1,5 @@
 import { readEventStream } from './sse'
+import { adaptivePost } from './adapt'
 import { endpointOf, type ChatMsg, type ContentPart, type ModelConfig, type StreamResult, type ToolCall, type ToolDef } from './config'
 
 /**
@@ -78,18 +79,9 @@ const toAnthropicTools = (tools?: ToolDef[]) =>
 // Anthropic caps temperature at 1.0 (OpenAI allows up to 2)
 const clampTemp = (t?: number) => Math.max(0, Math.min(1, t ?? 0.7))
 
-async function post(cfg: ModelConfig, key: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
-  const res = await fetch(endpointOf(cfg), {
-    method: 'POST',
-    signal,
-    headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': ANTHROPIC_VERSION },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`${res.status}: ${text.slice(0, 300) || res.statusText}`)
-  }
-  return res
+function post(cfg: ModelConfig, key: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
+  const headers = { 'x-api-key': key, 'anthropic-version': ANTHROPIC_VERSION }
+  return adaptivePost(endpointOf(cfg), headers, body, `${cfg.baseUrl}::${cfg.model}`, signal)
 }
 
 export async function streamAnthropic(

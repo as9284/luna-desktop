@@ -18,6 +18,8 @@ export interface Msg {
   attachments?: { name: string; kind?: string; preview?: string }[]
   /** inline Orbit/Atlas preview cards Luna produced during this turn */
   cards?: LunaChatCard[]
+  /** the activity trace — every step Luna ran this turn, saved for the compact record */
+  trace?: LunaStep[]
 }
 export interface Thread {
   id: string
@@ -31,8 +33,8 @@ interface ChatState {
   activeId: string
   /** threadId → in-flight request id; a thread streams independently of the others */
   streamingByThread: Record<string, string>
-  /** threadId → transient status line ("Searching the web…") */
-  statusByThread: Record<string, string | null>
+  /** threadId → the live activity trace while a turn is in flight (accumulates, then saved to the message) */
+  stepsByThread: Record<string, LunaStep[]>
   /** threadId → last error for that thread */
   errorByThread: Record<string, string>
   /** threads that finished streaming while not active */
@@ -62,7 +64,7 @@ export const useChat = create<ChatState>()(
         threads: [initial],
         activeId: initial.id,
         streamingByThread: {},
-        statusByThread: {},
+        stepsByThread: {},
         errorByThread: {},
         unreadIds: {},
 
@@ -81,7 +83,7 @@ export const useChat = create<ChatState>()(
           set((s) => {
             const cleaned = {
               streamingByThread: omit(s.streamingByThread, id),
-              statusByThread: omit(s.statusByThread, id),
+              stepsByThread: omit(s.stepsByThread, id),
               errorByThread: omit(s.errorByThread, id),
               unreadIds: omit(s.unreadIds, id),
             }
@@ -111,7 +113,7 @@ export const useChat = create<ChatState>()(
               return { ...t, messages: t.messages.slice(0, idx), updatedAt: Date.now() }
             }),
             streamingByThread: omit(s.streamingByThread, threadId),
-            statusByThread: omit(s.statusByThread, threadId),
+            stepsByThread: omit(s.stepsByThread, threadId),
             errorByThread: omit(s.errorByThread, threadId),
           }))
           return restored
@@ -158,7 +160,7 @@ export const useChat = create<ChatState>()(
                 : t,
             ),
             streamingByThread: { ...s.streamingByThread, [targetId]: requestId },
-            statusByThread: { ...s.statusByThread, [targetId]: null },
+            stepsByThread: { ...s.stepsByThread, [targetId]: [] },
             errorByThread: omit(s.errorByThread, targetId),
           }))
 
@@ -187,8 +189,17 @@ export const useChat = create<ChatState>()(
                   ? { ...t, messages: t.messages.map((m) => (m.id === botId ? { ...m, content: m.content + token } : m)) }
                   : t,
               ),
-              statusByThread: { ...s.statusByThread, [targetId]: null },
             }))
+
+          // accumulate the live activity trace: a running step creates a row, later events with
+          // the same id update it in place (sub-phase detail, then done/error)
+          const upsertStep = (step: LunaStep) =>
+            set((s) => {
+              const cur = s.stepsByThread[targetId] ?? []
+              const idx = cur.findIndex((x) => x.id === step.id)
+              const next = idx === -1 ? [...cur, step] : cur.map((x, i) => (i === idx ? step : x))
+              return { stepsByThread: { ...s.stepsByThread, [targetId]: next } }
+            })
 
           const appendCard = (card: LunaChatCard) =>
             set((s) => ({
@@ -204,7 +215,7 @@ export const useChat = create<ChatState>()(
             await api.chat(
               { id: requestId, messages: payload, temperature: opts.temperature, research, identity: true },
               appendToken,
-              (status) => set((s) => ({ statusByThread: { ...s.statusByThread, [targetId]: status } })),
+              upsertStep,
               appendCard,
             )
           } catch (e) {
@@ -225,13 +236,22 @@ export const useChat = create<ChatState>()(
               if (s.streamingByThread[targetId] !== requestId) return {}
               const stillExists = s.threads.some((t) => t.id === targetId)
               const finishedInBackground = stillExists && s.activeId !== targetId
+              // finalize any step still marked running (a stop mid-tool), then save the trace to the message
+              const steps = (s.stepsByThread[targetId] ?? []).map((st) => (st.state === 'running' || st.state === 'awaiting' ? { ...st, state: 'done' as const } : st))
               return {
-                // drop the assistant placeholder if the stream ended with no content (e.g. stopped early)
                 threads: s.threads.map((t) =>
-                  t.id === targetId ? { ...t, messages: t.messages.filter((m) => !(m.id === botId && !m.content && !m.cards?.length)) } : t,
+                  t.id === targetId
+                    ? {
+                        ...t,
+                        messages: t.messages
+                          .map((m) => (m.id === botId && steps.length ? { ...m, trace: steps } : m))
+                          // drop the assistant placeholder only if it produced nothing at all
+                          .filter((m) => !(m.id === botId && !m.content && !m.cards?.length && !steps.length)),
+                      }
+                    : t,
                 ),
                 streamingByThread: omit(s.streamingByThread, targetId),
-                statusByThread: omit(s.statusByThread, targetId),
+                stepsByThread: omit(s.stepsByThread, targetId),
                 unreadIds: finishedInBackground ? { ...s.unreadIds, [targetId]: true } : s.unreadIds,
               }
             })

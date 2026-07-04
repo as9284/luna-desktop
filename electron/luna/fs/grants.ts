@@ -94,7 +94,10 @@ export function createGrantStore(dirs: GrantDirs) {
   /** The live set of roots Luna may touch: the workspace plus every granted folder. */
   const roots = (): string[] => normalizeRoots([ensureWorkspace(), ...list().map((g) => g.path)])
 
-  const guardConfig = (): GuardConfig => ({ roots: roots(), denylist })
+  const guardConfig = (): GuardConfig => {
+    const r = roots()
+    return { roots: r, denylist, workspace: r[0] }
+  }
 
   return { workspacePath, ensureWorkspace, list, add, remove, roots, guardConfig, denylist }
 }

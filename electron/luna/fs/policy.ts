@@ -1,8 +1,9 @@
 /**
  * Tiered-by-risk permission policy (the dial the user chose):
  *  - read / list / stat  → silent (no prompt) inside a granted root
- *  - create / overwrite  → ask once, then remembered for the session
- *  - delete / run code    → always confirm, every time
+ *  - create / overwrite  → silent inside Luna's own workspace (her sandbox; overwrites are
+ *                          backed up so they stay recoverable); ask-once in a granted folder
+ *  - delete / run code    → always confirm, every time, everywhere
  *
  * classify() is pure. The "ask once, remembered" memory is a per-session Set the caller
  * owns, so it resets every launch — a fresh session always re-confirms writes at least once.
@@ -55,12 +56,15 @@ export function describe(action: FsAction, target: string): string {
 }
 
 /**
- * Decide whether an action needs the user, given what's already been approved this session.
- * `approvedOnce` holds keys (e.g. an action:target string) the user OK'd earlier.
+ * Decide whether an action needs the user, given what's already been approved this session and
+ * whether the target sits inside Luna's own workspace. `approvedOnce` holds keys (e.g. an
+ * action:target string) the user OK'd earlier. A create/overwrite inside the workspace is
+ * auto-approved; delete/run_code always confirm regardless of location.
  */
-export function needsApproval(action: FsAction, key: string, approvedOnce: ReadonlySet<string>): boolean {
+export function needsApproval(action: FsAction, key: string, approvedOnce: ReadonlySet<string>, inWorkspace = false): boolean {
   const tier = classify(action)
   if (tier === 'silent') return false
   if (tier === 'confirm') return true
-  return !approvedOnce.has(key) // ask-once
+  if (inWorkspace) return false // ask-once tier is auto-approved in Luna's sandbox
+  return !approvedOnce.has(key) // ask-once elsewhere
 }

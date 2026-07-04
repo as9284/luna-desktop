@@ -1,9 +1,9 @@
 import { type IpcMainEvent, ipcMain } from 'electron'
 import { runWebSearch } from '../search'
 import { runAtlasTool, saveResearchDoc } from '../atlas'
-import { LUNA_FS_TOOLS, LUNA_FS_TOOL_NAMES, runLunaFsTool } from '../luna'
+import { LUNA_FS_TOOLS, LUNA_FS_TOOL_NAMES, runLunaFsTool, stepFor, outcomeOf, type LunaStep } from '../luna'
 import { SOUL_TOOLS, SOUL_TOOL_NAMES, runSoulTool, composeIdentity } from '../soul'
-import { streamChat, hasKey, isNoKey, type ChatMsg } from '../llm'
+import { streamChat, hasKey, isNoKey, textCallAssistantContent, textCallObservationContent, type ChatMsg } from '../llm'
 
 /** Tool-call round trips before forcing a final answer without tools — guards against loops.
  *  A research → save → build → export chain legitimately needs several, so keep real headroom. */
@@ -190,7 +190,7 @@ export function registerLuna() {
   ipcMain.on('luna:chat', async (e, req: ChatRequest) => {
     const { id, messages, temperature } = req
     const chunkCh = `luna:chunk:${id}`
-    const statusCh = `luna:status:${id}`
+    const stepCh = `luna:step:${id}`
     const cardCh = `luna:card:${id}`
     const doneCh = `luna:done:${id}`
     const errCh = `luna:err:${id}`
@@ -239,66 +239,78 @@ export function registerLuna() {
         // 'tool_calls' whenever calls are present (some providers report 'stop' or null even when
         // they streamed native tool_calls), so gating on toolCalls.length is the robust check.
         if (toolCalls.length) {
-          // For text-format tool calls (DeepSeek V4's DSML dialect), the model emitted the call
-          // as prose, not as native tool_calls. Push the full assistant content (including the
-          // text block) WITHOUT tool_calls, and deliver tool results as user messages — the
-          // format the model expects, so it can continue the chain in the next round. For native
-          // tool_calls, use the standard assistant+tool_calls / tool-role format.
+          // Two conversation shapes. Native tool_calls use the standard assistant+tool_calls /
+          // tool-role format. Text-format calls (DeepSeek/Hermes/Mistral dialects, from a model
+          // that doesn't do native tool calling) use a ReAct transcript instead: the assistant
+          // keeps its prose but not the raw call block, and results come back as one user-role
+          // observation with a steering nudge — the shape such a model will actually continue
+          // from. See textCallAssistantContent / textCallObservationContent.
           if (textToolCalls) {
-            convo.push({ role: 'assistant', content: content || null })
+            convo.push({ role: 'assistant', content: textCallAssistantContent(content, toolCalls) })
           } else {
             convo.push({ role: 'assistant', content: content || null, tool_calls: toolCalls })
           }
-          const toolResults: string[] = []
+          const observations: { name: string; result: string }[] = []
           for (const call of toolCalls) {
             const name = call.function.name
+            let pargs: Record<string, unknown> = {}
+            try {
+              pargs = JSON.parse(call.function.arguments || '{}')
+            } catch {
+              // malformed arguments — leave empty; the tool reports its own error
+            }
+            // announce this activity to the renderer: a live step with kind/label/target, then a
+            // done/error on completion, plus sub-phase details emitted from inside the executor
+            const seed = stepFor(name, pargs)
+            const stepId = call.id || crypto.randomUUID()
+            const emit = (state: LunaStep['state'], detail?: string) =>
+              e.sender.send(stepCh, { id: stepId, kind: seed.kind, label: seed.label, target: seed.target, state, detail } as LunaStep)
+            emit('running')
+
             let result: string
             if (name === 'web_search') {
-              e.sender.send(statusCh, 'Searching the web…')
-              let query = ''
-              try {
-                query = JSON.parse(call.function.arguments || '{}').query ?? ''
-              } catch {
-                // malformed arguments — treat as empty query below
+              const query = typeof pargs.query === 'string' ? pargs.query : ''
+              // report pages read as a running sub-phase; archive to the research shelf when opted in
+              let pages = 0
+              const onDocs = (docs: { url: string; title: string | null; text: string; markdown: string }[]) => {
+                pages += docs.length
+                emit('running', `reading ${pages} page${pages > 1 ? 's' : ''}…`)
+                if (req.research) for (const d of docs) void saveResearchDoc(d.url, d.title, d.text, d.markdown).catch(() => {})
               }
-              // research shelf: archive the pages Luna reads, fire-and-forget
-              const onDocs = req.research
-                ? (docs: { url: string; title: string | null; text: string; markdown: string }[]) => {
-                    for (const d of docs) void saveResearchDoc(d.url, d.title, d.text, d.markdown).catch(() => {})
-                  }
-                : undefined
               result = query
                 ? await runWebSearch(query, signal, onDocs).catch(
                     (err) => `Search failed: ${err instanceof Error ? err.message : String(err)}`,
                   )
                 : 'No query provided.'
             } else if (name.startsWith('atlas_')) {
-              e.sender.send(statusCh, 'Working in Atlas…')
               result = await runAtlasTool(name, call.function.arguments || '{}', signal)
             } else if (name.startsWith('orbit_')) {
-              e.sender.send(statusCh, 'Working in Orbit…')
               result = await runOrbitTool(e, name, call.function.arguments || '{}')
             } else if (LUNA_FS_TOOL_NAMES.has(name)) {
-              result = await runLunaFsTool(name, call.function.arguments || '{}', { event: e, signal, statusCh })
+              result = await runLunaFsTool(name, call.function.arguments || '{}', {
+                event: e,
+                signal,
+                onDetail: (phase) => { if (phase) emit('running', phase) },
+              })
             } else if (SOUL_TOOL_NAMES.has(name)) {
               result = await runSoulTool(name, call.function.arguments || '{}')
             } else {
               result = JSON.stringify({ error: `Unknown tool: ${name}` })
             }
+            const outcome = outcomeOf(name, result)
+            emit(outcome.ok ? 'done' : 'error', outcome.detail)
             const card = buildCard(name, result)
             if (card) e.sender.send(cardCh, card)
             if (textToolCalls) {
-              toolResults.push(`[Tool result: ${name}]\n${result}`)
+              observations.push({ name, result })
             } else {
               convo.push({ role: 'tool', tool_call_id: call.id, content: result })
             }
           }
-          // For text-format calls, deliver all tool results as a single user message — the
-          // format a model that doesn't use native tool calling can follow.
-          if (textToolCalls && toolResults.length) {
-            convo.push({ role: 'user', content: toolResults.join('\n\n') })
+          // For text-format calls, deliver all results as one observation the model continues from.
+          if (textToolCalls && observations.length) {
+            convo.push({ role: 'user', content: textCallObservationContent(observations) })
           }
-          e.sender.send(statusCh, null)
           continue
         }
 

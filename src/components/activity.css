@@ -1,0 +1,185 @@
+/* Luna's processing feedback — the live activity stack + the saved trace.
+   Characterful-monochrome: ink glyphs on black, accent while running, --danger only on failure.
+   All motion is transform/opacity (60fps) and only runs inside .astep--running. */
+
+.aglyph { width: 20px; height: 20px; display: block; overflow: visible; }
+.aglyph * { vector-effect: non-scaling-stroke; }
+.atick { width: 15px; height: 15px; display: block; color: var(--ink-2); }
+.atick .aglyph { width: 15px; height: 15px; }
+
+/* ---------- live stack ---------- */
+.ptrace { position: relative; display: flex; flex-direction: column; margin: 2px 0 4px; }
+.ptrace-rail {
+  position: absolute; left: 13px; top: 22px; bottom: 22px; width: 1px;
+  background: linear-gradient(var(--line), var(--line-2));
+}
+.astep {
+  display: grid;
+  grid-template-columns: 27px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  animation: astepIn 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.astep-glyph {
+  width: 27px; height: 27px;
+  display: grid; place-items: center;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line-2);
+  color: var(--ink-2);
+  position: relative; z-index: 1;
+  transition: color 0.3s, border-color 0.3s, box-shadow 0.3s;
+}
+.astep--running .astep-glyph {
+  color: var(--accent);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.07), 0 0 14px rgba(var(--accent-rgb), 0.14);
+}
+.astep--awaiting .astep-glyph {
+  color: var(--accent);
+  border-color: rgba(var(--accent-rgb), 0.32);
+  animation: astepWait 1.7s ease-in-out infinite;
+}
+.astep--done .astep-glyph { color: var(--ink); }
+.astep--error .astep-glyph { color: var(--danger); border-color: rgba(225, 90, 79, 0.42); }
+.astep--ghost .astep-glyph { background: transparent; border-color: transparent; box-shadow: none; }
+
+.astep-text { min-width: 0; }
+.astep-label { font-size: 13.5px; color: var(--ink); letter-spacing: -0.005em; line-height: 1.35; }
+.astep-label b { font-weight: 500; }
+.astep-label--muted { color: var(--ink-2); }
+.astep-sub {
+  font-family: var(--f-mono);
+  font-size: 10.5px; color: var(--ink-3); letter-spacing: 0.02em;
+  margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.astep--running .astep-sub { color: var(--ink-2); }
+.astep--error .astep-sub { color: var(--danger); opacity: 0.85; }
+.astep-meta { display: grid; place-items: center; min-width: 15px; }
+.astep-meta .atick { animation: astepTick 0.4s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+
+@keyframes astepIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes astepTick { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
+@keyframes astepWait {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.05); }
+  50% { box-shadow: 0 0 0 5px rgba(var(--accent-rgb), 0.11), 0 0 16px rgba(var(--accent-rgb), 0.2); }
+}
+
+/* ---------- saved trace (on a finished message) ---------- */
+.svtrace {
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  margin: 2px 0 10px;
+  max-width: 420px;
+  overflow: hidden;
+}
+.svtrace-bar {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 8px 11px;
+  background: none; border: 0; cursor: pointer; text-align: left; color: inherit;
+}
+.svtrace-bar:hover { background: rgba(255, 255, 255, 0.02); }
+.svtrace-glyphs { display: flex; align-items: center; gap: 2px; }
+.svtrace-mini { width: 18px; height: 18px; display: grid; place-items: center; color: var(--ink-2); }
+.svtrace-mini .aglyph { width: 16px; height: 16px; }
+.svtrace-mini.err { color: var(--danger); }
+.svtrace-cap { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-2); letter-spacing: 0.03em; }
+.svtrace-chev { margin-left: auto; color: var(--ink-3); transition: transform 0.2s; flex: 0 0 auto; }
+.svtrace.open .svtrace-chev { transform: rotate(180deg); }
+.svtrace-body { border-top: 1px solid var(--line-2); padding: 5px 12px 9px; display: flex; flex-direction: column; }
+.svtrace-line { display: grid; grid-template-columns: 20px 1fr; gap: 9px; align-items: start; padding: 4px 0; font-size: 12.5px; color: var(--ink-2); line-height: 1.4; }
+.svtrace-g { width: 20px; height: 20px; display: grid; place-items: center; color: var(--ink-2); margin-top: 1px; }
+.svtrace-g .aglyph { width: 17px; height: 17px; }
+.svtrace-line.err, .svtrace-line.err .svtrace-g { color: var(--danger); }
+.svtrace-l b { color: var(--ink); font-weight: 500; }
+.svtrace-line.err .svtrace-l b { color: var(--danger); }
+.svtrace-reason { color: var(--ink-3); }
+
+/* ================= GLYPH MOTION — only inside a running step ================= */
+.astep--running .a-search { animation: gSweep 2.6s ease-in-out infinite; transform-origin: 10px 10px; }
+.astep--running .a-search .scan { animation: gScan 1.4s ease-in-out infinite; }
+@keyframes gSweep { 0%, 100% { transform: translate(-1px, 0) rotate(-6deg); } 50% { transform: translate(1px, 1px) rotate(6deg); } }
+@keyframes gScan { 0%, 100% { transform: translateX(-3px); opacity: 0.4; } 50% { transform: translateX(3px); opacity: 1; } }
+
+.astep--running .a-web .lat { animation: gLat 2.4s ease-in-out infinite; }
+.astep--running .a-web .ping { animation: gOrbit 3s linear infinite; transform-origin: 12px 12px; }
+@keyframes gLat { 0%, 100% { transform: translateY(-2px); } 50% { transform: translateY(2px); } }
+@keyframes gOrbit { to { transform: rotate(360deg); } }
+
+.astep--running .a-read .ln { transform-origin: left center; animation: gDraw 2.2s ease-in-out infinite; }
+.astep--running .a-read .ln:nth-child(3) { animation-delay: 0.15s; }
+.astep--running .a-read .ln:nth-child(4) { animation-delay: 0.3s; }
+@keyframes gDraw { 0% { transform: scaleX(0); opacity: 0.3; } 40% { transform: scaleX(1); opacity: 1; } 90%, 100% { transform: scaleX(1); opacity: 0.55; } }
+
+.astep--running .a-image .scanl { animation: gScanline 1.9s ease-in-out infinite; }
+@keyframes gScanline { 0% { transform: translateY(-6px); opacity: 0; } 20%, 80% { opacity: 1; } 100% { transform: translateY(6px); opacity: 0; } }
+
+.astep--running .flap { transform-origin: 3px 9px; animation: gFlap 2.4s ease-in-out infinite; }
+.astep--running .file { animation: gPeek 2.4s ease-in-out infinite; }
+@keyframes gFlap { 0%, 100% { transform: rotateX(0); } 45%, 75% { transform: rotateX(-42deg); } }
+@keyframes gPeek { 0%, 30%, 100% { transform: translateY(2px); opacity: 0; } 50%, 70% { transform: translateY(-1px); opacity: 1; } }
+
+.astep--running .pen { animation: gPen 2.4s ease-in-out infinite; }
+.astep--running .stroke { stroke-dasharray: 16; stroke-dashoffset: 16; animation: gPenStroke 2.4s ease-in-out infinite; }
+@keyframes gPen { 0% { transform: translate(-5px, 3px); } 60% { transform: translate(4px, -2px); } 100% { transform: translate(-5px, 3px); } }
+@keyframes gPenStroke { 0% { stroke-dashoffset: 16; } 60% { stroke-dashoffset: 0; } 61%, 100% { stroke-dashoffset: 0; opacity: 0; } }
+
+.astep--running .arw { animation: gExport 1.8s ease-in-out infinite; }
+@keyframes gExport { 0%, 100% { transform: translateY(-1px); opacity: 0.5; } 50% { transform: translateY(2px); opacity: 1; } }
+
+.astep--running .lb { animation: gBrL 2s ease-in-out infinite; }
+.astep--running .rb { animation: gBrR 2s ease-in-out infinite; }
+.astep--running .caret { animation: gBlink 1s steps(1) infinite; }
+@keyframes gBrL { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-2px); } }
+@keyframes gBrR { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(2px); } }
+@keyframes gBlink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.15; } }
+
+.astep--running .a-del .ln { animation: gDissolve 2.2s ease-in-out infinite; }
+.astep--running .a-del .ln:nth-child(4) { animation-delay: 0.25s; }
+@keyframes gDissolve { 0% { opacity: 1; transform: translateY(0); } 70%, 100% { opacity: 0; transform: translateY(3px); } }
+
+.astep--running .item { animation: gDrop 2s ease-in-out infinite; }
+.astep--running .tray { animation: gCatch 2s ease-in-out infinite; transform-origin: 12px 17px; }
+@keyframes gDrop { 0% { transform: translateY(-7px); opacity: 0; } 35% { opacity: 1; } 60%, 100% { transform: translateY(0); opacity: 1; } }
+@keyframes gCatch { 0%, 55%, 100% { transform: scaleY(1); } 65% { transform: scaleY(0.86); } }
+
+.astep--running .marker { animation: gHlMove 2.4s ease-in-out infinite; }
+.astep--running .band { transform-origin: left center; animation: gHlBand 2.4s ease-in-out infinite; }
+@keyframes gHlMove { 0% { transform: translateX(-5px); } 65% { transform: translateX(5px); } 100% { transform: translateX(-5px); } }
+@keyframes gHlBand { 0% { transform: scaleX(0); } 65% { transform: scaleX(1); } 80%, 100% { transform: scaleX(1); opacity: 0.35; } }
+
+.astep--running .chk { stroke-dasharray: 12; stroke-dashoffset: 12; animation: gTick 2.2s ease-in-out infinite; }
+@keyframes gTick { 0%, 10% { stroke-dashoffset: 12; } 45% { stroke-dashoffset: 0; } 88% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 12; opacity: 0; } }
+
+.astep--running .a-note .w { transform-origin: left center; animation: gNote 2.2s ease-in-out infinite; }
+.astep--running .a-note .w:nth-child(4) { animation-delay: 0.25s; }
+@keyframes gNote { 0% { transform: scaleX(0); } 50% { transform: scaleX(1); } 90%, 100% { transform: scaleX(1); opacity: 0.6; } }
+
+.astep--running .arc { stroke-dasharray: 54; stroke-dashoffset: 54; transform-origin: 12px 12px; transform: rotate(-90deg); animation: gRing 2.4s ease-in-out infinite; }
+@keyframes gRing { 0% { stroke-dashoffset: 54; } 70%, 100% { stroke-dashoffset: 8; } }
+
+.astep--running .a-skill { animation: gTwinkle 2s ease-in-out infinite; transform-origin: 12px 12px; }
+.astep--running .a-skill ~ .s2, .astep--running .s2 { animation: gTwinkle2 2s ease-in-out infinite; transform-origin: 17px 7px; }
+@keyframes gTwinkle { 0%, 100% { transform: scale(0.85) rotate(0); } 50% { transform: scale(1.05) rotate(45deg); } }
+@keyframes gTwinkle2 { 0%, 100% { opacity: 0.3; transform: scale(0.6); } 50% { opacity: 1; transform: scale(1); } }
+
+.astep--running .a-mem .dot { animation: gIntoRing 2.4s ease-in-out infinite; }
+.astep--running .a-mem .ring { animation: gRingPulse 2.4s ease-in-out infinite; transform-origin: 12px 12px; }
+@keyframes gIntoRing { 0% { transform: translate(6px, -6px); opacity: 0; } 40% { opacity: 1; } 75%, 100% { transform: translate(0, 0); opacity: 1; } }
+@keyframes gRingPulse { 0%, 70%, 100% { transform: scale(1); } 82% { transform: scale(1.14); } }
+
+.astep--running .a-think .core { animation: gBreathe 2.2s ease-in-out infinite; transform-origin: 12px 12px; }
+.astep--running .a-think .d1 { animation: gDrift 2.2s ease-in-out infinite; }
+.astep--running .a-think .d2 { animation: gDrift 2.2s ease-in-out infinite 0.4s; }
+@keyframes gBreathe { 0%, 100% { transform: scale(1); opacity: 0.85; } 50% { transform: scale(1.16); opacity: 1; } }
+@keyframes gDrift { 0%, 100% { opacity: 0.25; transform: translateX(0); } 50% { opacity: 0.9; transform: translateX(1.5px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .astep { animation: none; }
+  .astep--running .astep-glyph *,
+  .astep-meta .atick { animation: none !important; }
+  .astep--running .stroke, .astep--running .chk, .astep--running .arc { stroke-dashoffset: 0 !important; }
+}

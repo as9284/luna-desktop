@@ -3,6 +3,7 @@ import { useUI } from '../store/ui'
 import { useOrbit, type ProjectStatus } from '../store/orbit'
 import { useMeetings, type MeetingSession } from '../store/meetings'
 import { goHome } from '../lib/router'
+import { ProgressTrace } from '../components/ProgressTrace'
 import { Badge, Button, Checkbox, ConfirmModal, IconButton, Input, Modal, openContextMenu, Segmented, Slider, Textarea, toast } from '../ui'
 import './orbit.css'
 
@@ -529,6 +530,15 @@ function Meeting() {
             )}
             <div ref={feedEnd} />
           </div>
+
+          {ending && (
+            <div className="meeting-organizing">
+              <ProgressTrace
+                steps={[{ id: 'summarize', kind: 'note', state: 'running', label: 'Organizing your notes', detail: 'summarizing…' }]}
+                thinking={false}
+              />
+            </div>
+          )}
 
           <div className="meeting-composer">
             <div className="meeting-composer-in">

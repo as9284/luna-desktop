@@ -6,9 +6,29 @@ import {
 } from './config'
 import { streamOpenAI, completeOpenAI } from './openai'
 import { streamAnthropic, completeAnthropic } from './anthropic'
-import { makeToolTextFilter, parseTextToolCalls } from './toolText'
+import { makeToolTextFilter, parseTextToolCalls, stripReasoning } from './toolText'
+
+/** Set LUNA_LLM_DEBUG=1 to log each round's outbound convo and the parsed model output to stderr.
+ *  The only way to see WHY a given model stops or loops mid tool-chain without a live debugger. */
+const DEBUG = !!process.env.LUNA_LLM_DEBUG
+
+function logRequest(cfg: ModelConfig, convo: ChatMsg[], opts: StreamOpts) {
+  const roles = convo
+    .map((m) => {
+      const size = typeof m.content === 'string' ? m.content.length : Array.isArray(m.content) ? `${m.content.length}p` : 0
+      return `${m.role}(${size})${m.tool_calls?.length ? `+${m.tool_calls.length}tc` : ''}`
+    })
+    .join(' → ')
+  console.error(`[llm] → ${cfg.protocol} ${cfg.model} tools:${opts.tools?.length ?? 0} | ${roles}`)
+}
+
+function logResult(kind: string, content: string, calls: { function: { name: string } }[]) {
+  const names = calls.map((c) => c.function.name).join(', ')
+  console.error(`[llm] ← ${kind} calls:[${names}] text:${JSON.stringify((content || '').slice(0, 120))}`)
+}
 
 export type { ChatMsg, ContentPart, ToolDef, ToolCall, StreamResult, Slot, Protocol, ModelConfig } from './config'
+export { textCallAssistantContent, textCallObservationContent } from './toolText'
 
 const NO_KEY = 'NO_KEY'
 export const isNoKey = (e: unknown) => e instanceof Error && e.message === NO_KEY
@@ -31,42 +51,45 @@ export async function streamChat(
   const key = getSlotKey(slot)
   if (!key) throw new Error(NO_KEY)
 
-  // Some models emit tool calls as text (Anthropic function-calling XML) instead of native
-  // tool_calls/tool_use. The filter keeps that XML out of the live stream; parseTextToolCalls
-  // turns it back into real tool calls after the stream ends.
+  if (DEBUG) logRequest(cfg, convo, opts)
+
+  // Some models emit tool calls as text (function-calling XML/JSON dialects) instead of native
+  // tool_calls/tool_use, and some leak <think> reasoning inline. The filter keeps both out of the
+  // live stream; parseTextToolCalls rescues the calls and stripReasoning drops the reasoning.
   const filter = makeToolTextFilter(onDelta)
   const result =
     cfg.protocol === 'anthropic'
       ? await streamAnthropic(cfg, key, convo, opts, (t) => filter.push(t))
       : await streamOpenAI(cfg, key, convo, opts, (t) => filter.push(t))
+  filter.flush()
 
+  // Strip inline reasoning from the content too (the filter already kept it out of the stream) so
+  // it never enters the history we replay to the model or the prose we parse tool calls out of.
+  const content = stripReasoning(result.content)
+
+  // Native tool_calls win. Some OpenAI-compatible providers (DeepSeek among them) stream them but
+  // report a finish_reason other than 'tool_calls' (e.g. 'stop', or null when the reason chunk is
+  // missed). The tool loop gates on calls being present, so normalize the reason here.
   if (result.toolCalls.length) {
-    filter.flush()
-    // Some OpenAI-compatible providers (DeepSeek among them) stream native tool_calls but
-    // report a finish_reason other than 'tool_calls' (e.g. 'stop', or null when the reason
-    // chunk is missed). The tool loop gates on tool calls being present, so normalize the
-    // reason here — what matters is that there are calls to execute, not the exact string.
-    return { ...result, finishReason: 'tool_calls' }
+    if (DEBUG) logResult('native', content, result.toolCalls)
+    return { ...result, content, finishReason: 'tool_calls' }
   }
-  const parsed = parseTextToolCalls(result.content)
-  if (!parsed) {
-    filter.flush()
-    return result
+
+  // No native calls — rescue a text-format tool block if one is present and tools were offered.
+  const parsed = parseTextToolCalls(content)
+  if (parsed && opts.tools?.length && parsed.calls.length) {
+    // Hand back the CLEAN prose (not the raw call block) plus the parsed calls, flagged so the
+    // loop replays clean history and feeds results back as a ReAct observation the model will
+    // continue from — replaying the raw block makes weaker models echo the call instead of using
+    // the result. See textCallAssistantContent / textCallObservationContent in ipc/luna.ts.
+    if (DEBUG) logResult('text', parsed.clean, parsed.calls)
+    return { content: parsed.clean, toolCalls: parsed.calls, finishReason: 'tool_calls', textToolCalls: true }
   }
-  // A text tool-call block was present (and already withheld from the stream). The renderer saw
-  // only parsed.clean (the filter suppressed the block), but the conversation history sent back
-  // to the model should keep the FULL assistant content — models that emit text-format calls
-  // (DeepSeek V4's DSML dialect) need to see their own emitted block to continue the tool chain
-  // in the next round. Stripping it to parsed.clean can make the model think it never called the
-  // tool and stop after one round. The textToolCalls flag tells the loop to format the tool
-  // result as a user message (not a tool-role message) so the model that doesn't use native
-  // tool calling can follow the chain.
-  if (opts.tools?.length && parsed.calls.length) {
-    return { content: result.content, toolCalls: parsed.calls, finishReason: 'tool_calls', textToolCalls: true }
-  }
-  // Tools weren't offered this round, or the block was truncated/malformed: drop the raw XML,
-  // keep only the clean prose so the tags never surface in the chat.
-  return { ...result, content: parsed.clean }
+  // A block that was truncated/malformed, or tools weren't offered: keep the clean prose so no
+  // tags surface in chat. Otherwise the reasoning-stripped content is the final answer.
+  const finalContent = parsed ? parsed.clean : content
+  if (DEBUG) logResult('final', finalContent, [])
+  return { ...result, content: finalContent }
 }
 
 /** One-shot (non-streaming) completion — used for meeting wrap-ups and Atlas digests. */
@@ -74,7 +97,9 @@ export async function complete(slot: Slot, convo: ChatMsg[], opts: { temperature
   const cfg = getConfig(slot)
   const key = getSlotKey(slot)
   if (!key) throw new Error(NO_KEY)
-  return cfg.protocol === 'anthropic' ? completeAnthropic(cfg, key, convo, opts) : completeOpenAI(cfg, key, convo, opts)
+  const raw = cfg.protocol === 'anthropic' ? await completeAnthropic(cfg, key, convo, opts) : await completeOpenAI(cfg, key, convo, opts)
+  // a reasoning model may inline <think>…</think> in the one-shot content — keep it out of summaries
+  return stripReasoning(raw)
 }
 
 /* ---------------- vision ---------------- */
@@ -87,12 +112,15 @@ const MAX_IMAGE_BYTES = 12 * 1024 * 1024
 
 export const isImageExt = (ext: string): boolean => ext.toLowerCase() in IMAGE_MIME
 
-/** Turn an image file into rich text (description + verbatim OCR) via the vision slot. */
+/** Turn an image file into rich text (description + verbatim OCR). Uses the dedicated vision slot
+ *  when one is configured, otherwise falls back to the main slot — so a single multimodal model
+ *  set as `main` can see images without a separate vision key. */
 export async function describeImage(realPath: string, question?: string): Promise<{ ok: boolean; text: string; error?: string }> {
   const ext = realPath.slice(realPath.lastIndexOf('.')).toLowerCase()
   const mimeType = IMAGE_MIME[ext]
   if (!mimeType) return { ok: false, text: '', error: 'Unsupported image type.' }
-  if (!hasSlotKey('vision')) return { ok: false, text: '', error: 'No vision model set — add a vision key in Settings to let Luna see images.' }
+  const slot: Slot | null = hasSlotKey('vision') ? 'vision' : hasSlotKey('main') ? 'main' : null
+  if (!slot) return { ok: false, text: '', error: 'No model set — add a key in Settings to let Luna see images.' }
   let buf: Buffer
   try {
     buf = await fs.readFile(realPath)
@@ -106,10 +134,10 @@ export async function describeImage(realPath: string, question?: string): Promis
     { role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image', mimeType, dataBase64: buf.toString('base64') }] },
   ]
   try {
-    const text = (await complete('vision', convo, { temperature: 0.2 })).trim()
-    return text ? { ok: true, text } : { ok: false, text: '', error: 'The vision model returned nothing.' }
+    const text = (await complete(slot, convo, { temperature: 0.2 })).trim()
+    return text ? { ok: true, text } : { ok: false, text: '', error: 'The model returned nothing for this image.' }
   } catch (e) {
-    return { ok: false, text: '', error: isNoKey(e) ? 'No vision model configured.' : e instanceof Error ? e.message : String(e) }
+    return { ok: false, text: '', error: isNoKey(e) ? 'No model configured to read images.' : e instanceof Error ? e.message : String(e) }
   }
 }
 

@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "typecheck": "tsc --noEmit",
-    "test": "tsx scripts/test-fs.mts && tsx scripts/test-sandbox.mts && tsx scripts/test-extract.mts && tsx scripts/test-pptx.mts && tsx scripts/test-tools.mts && tsx scripts/test-llm.mts && tsx scripts/test-soul.mts",
+    "test": "tsx scripts/test-fs.mts && tsx scripts/test-sandbox.mts && tsx scripts/test-extract.mts && tsx scripts/test-pptx.mts && tsx scripts/test-tools.mts && tsx scripts/test-llm.mts && tsx scripts/test-soul.mts && tsx scripts/test-activity.mts",
     "preview": "vite preview",
     "make-icon": "node scripts/make-icon.mjs",
     "dist": "tsc && vite build && electron-builder",

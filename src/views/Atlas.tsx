@@ -3,6 +3,7 @@ import { goHome } from '../lib/router'
 import { useAtlas } from '../store/atlas'
 import { useOrbit } from '../store/orbit'
 import Markdown from '../components/Markdown'
+import { ProgressTrace } from '../components/ProgressTrace'
 import Lightbox from '../components/Lightbox'
 import DocViewer from './doc/DocViewer'
 import { hasVaultFile } from './doc/helpers'
@@ -747,8 +748,8 @@ function AskPanel({ item, onClose }: { item: AtlasItem; onClose: () => void }) {
               <Markdown content={m.content} />
             </div>
           ) : (
-            <div key={i} className="ask-a thinking-txt">
-              thinking…
+            <div key={i} className="ask-a">
+              <ProgressTrace steps={[]} thinking />
             </div>
           ),
         )}
