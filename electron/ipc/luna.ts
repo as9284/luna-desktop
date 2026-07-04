@@ -228,15 +228,28 @@ export function registerLuna() {
           emittedText = true
           e.sender.send(chunkCh, delta)
         }
-        const { content, toolCalls, finishReason } = await streamChat(
+        const { content, toolCalls, textToolCalls } = await streamChat(
           'main',
           convo,
           { temperature, tools: withTools ? TOOLS : undefined, signal },
           onDelta,
         )
 
-        if (finishReason === 'tool_calls' && toolCalls.length) {
-          convo.push({ role: 'assistant', content: content || null, tool_calls: toolCalls })
+        // Execute when there are tool calls to run. streamChat normalizes the finish reason to
+        // 'tool_calls' whenever calls are present (some providers report 'stop' or null even when
+        // they streamed native tool_calls), so gating on toolCalls.length is the robust check.
+        if (toolCalls.length) {
+          // For text-format tool calls (DeepSeek V4's DSML dialect), the model emitted the call
+          // as prose, not as native tool_calls. Push the full assistant content (including the
+          // text block) WITHOUT tool_calls, and deliver tool results as user messages — the
+          // format the model expects, so it can continue the chain in the next round. For native
+          // tool_calls, use the standard assistant+tool_calls / tool-role format.
+          if (textToolCalls) {
+            convo.push({ role: 'assistant', content: content || null })
+          } else {
+            convo.push({ role: 'assistant', content: content || null, tool_calls: toolCalls })
+          }
+          const toolResults: string[] = []
           for (const call of toolCalls) {
             const name = call.function.name
             let result: string
@@ -274,7 +287,16 @@ export function registerLuna() {
             }
             const card = buildCard(name, result)
             if (card) e.sender.send(cardCh, card)
-            convo.push({ role: 'tool', tool_call_id: call.id, content: result })
+            if (textToolCalls) {
+              toolResults.push(`[Tool result: ${name}]\n${result}`)
+            } else {
+              convo.push({ role: 'tool', tool_call_id: call.id, content: result })
+            }
+          }
+          // For text-format calls, deliver all tool results as a single user message — the
+          // format a model that doesn't use native tool calling can follow.
+          if (textToolCalls && toolResults.length) {
+            convo.push({ role: 'user', content: toolResults.join('\n\n') })
           }
           e.sender.send(statusCh, null)
           continue

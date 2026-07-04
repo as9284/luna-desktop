@@ -42,16 +42,27 @@ export async function streamChat(
 
   if (result.toolCalls.length) {
     filter.flush()
-    return result
+    // Some OpenAI-compatible providers (DeepSeek among them) stream native tool_calls but
+    // report a finish_reason other than 'tool_calls' (e.g. 'stop', or null when the reason
+    // chunk is missed). The tool loop gates on tool calls being present, so normalize the
+    // reason here — what matters is that there are calls to execute, not the exact string.
+    return { ...result, finishReason: 'tool_calls' }
   }
   const parsed = parseTextToolCalls(result.content)
   if (!parsed) {
     filter.flush()
     return result
   }
-  // A text tool-call block was present (and already withheld from the stream).
+  // A text tool-call block was present (and already withheld from the stream). The renderer saw
+  // only parsed.clean (the filter suppressed the block), but the conversation history sent back
+  // to the model should keep the FULL assistant content — models that emit text-format calls
+  // (DeepSeek V4's DSML dialect) need to see their own emitted block to continue the tool chain
+  // in the next round. Stripping it to parsed.clean can make the model think it never called the
+  // tool and stop after one round. The textToolCalls flag tells the loop to format the tool
+  // result as a user message (not a tool-role message) so the model that doesn't use native
+  // tool calling can follow the chain.
   if (opts.tools?.length && parsed.calls.length) {
-    return { content: parsed.clean, toolCalls: parsed.calls, finishReason: 'tool_calls' }
+    return { content: result.content, toolCalls: parsed.calls, finishReason: 'tool_calls', textToolCalls: true }
   }
   // Tools weren't offered this round, or the block was truncated/malformed: drop the raw XML,
   // keep only the clean prose so the tags never surface in the chat.

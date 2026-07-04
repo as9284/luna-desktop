@@ -47,6 +47,10 @@ export interface StreamResult {
   content: string
   toolCalls: ToolCall[]
   finishReason: string | null
+  /** true when the tool calls were rescued from a text-format block (DSML/XML) rather than
+   *  returned as native tool_calls by the model. The conversation history is formatted
+   *  differently for text-format calls so the model can continue the chain. */
+  textToolCalls?: boolean
 }
 
 const DEFAULTS: Record<Slot, ModelConfig> = {

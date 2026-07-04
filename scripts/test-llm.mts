@@ -190,5 +190,67 @@ section('Text tool-call stream filter')
   ok('partialMarkerTail holds nothing for unrelated text', partialMarkerTail('all done.') === 0)
 }
 
+// ---- DSML dialect (DeepSeek V4 Flash/Pro) ---------------------------------
+// DeepSeek V4 emits tool calls as text using a `<｜｜DSML｜｜…>` marker dialect where ｜ is
+// U+FF5C (fullwidth bar). The structure is otherwise identical to the Anthropic XML dialect.
+section('Text tool-call parser — DSML dialect (DeepSeek V4)')
+{
+  // the exact shape DeepSeek V4 emits, including a large HTML `content` argument with nested
+  // tags — the case that was leaking into the chat before this fix
+  const html = '<!DOCTYPE html><html><head><style>body{color:#1a1a1a}</style></head>' +
+    '<body><h1>Europe\'s Deadly Heatwave</h1><p>France has reported 2,025 excess deaths.</p>' +
+    '<div class="stat-grid"><div class="stat-card">2,025</div></div></body></html>'
+  const content =
+    'Writing the briefing to the workspace.\n' +
+    '<｜｜DSML｜｜tool_calls>\n' +
+    '<｜｜DSML｜｜invoke name="write_file">\n' +
+    `<｜｜DSML｜｜parameter name="content" string="true">${html}</｜｜DSML｜｜parameter>\n` +
+    '<｜｜DSML｜｜parameter name="path" string="true">C:\\Users\\Anthony Saliba\\Documents\\Luna\\europe-heatwave-2025\\briefing.html</｜｜DSML｜｜parameter>\n' +
+    '</｜｜DSML｜｜invoke>\n' +
+    '</｜｜DSML｜｜tool_calls>'
+  const parsed = parseTextToolCalls(content)
+  ok('detects a DSML tool-call block', !!parsed)
+  ok('keeps the prose before the DSML block as clean content', parsed?.clean === 'Writing the briefing to the workspace.', JSON.stringify(parsed?.clean))
+  ok('parses the invoke in a DSML block', parsed?.calls.length === 1, String(parsed?.calls.length))
+  ok('reads the tool name from a DSML block', parsed?.calls[0]?.function.name === 'write_file')
+  ok(
+    'preserves a large HTML content argument with nested tags intact',
+    JSON.parse(parsed?.calls[0]?.function.arguments || '{}').content === html,
+    parsed?.calls[0]?.function.arguments,
+  )
+  ok(
+    'preserves a Windows path argument with backslashes',
+    JSON.parse(parsed?.calls[0]?.function.arguments || '{}').path === 'C:\\Users\\Anthony Saliba\\Documents\\Luna\\europe-heatwave-2025\\briefing.html',
+    parsed?.calls[0]?.function.arguments,
+  )
+
+  // a DSML block truncated mid-value yields the clean prose and zero calls
+  const cut = parseTextToolCalls('Working on it.\n<｜｜DSML｜｜tool_calls>\n<｜｜DSML｜｜invoke name="export_pdf">\n<｜｜DSML｜｜parameter name="html" string="true"><html>')
+  ok('truncated DSML block → clean prose, zero calls', cut?.clean === 'Working on it.' && cut?.calls.length === 0)
+}
+
+section('Text tool-call stream filter — DSML dialect')
+{
+  // the DSML opener split across chunks must still be suppressed. The prose before the
+  // opener (including its trailing newline) is emitted verbatim; the split marker is withheld.
+  const chunks = [
+    'Writing the briefing.\n',
+    '<｜｜',
+    'DSML｜｜tool_calls>\n<｜｜DSML｜｜invoke name="write_file">',
+    '<｜｜DSML｜｜parameter name="path" string="true">a.html</｜｜DSML｜｜parameter></｜｜DSML｜｜invoke></｜｜DSML｜｜tool_calls>',
+  ]
+  const out: string[] = []
+  const filter = makeToolTextFilter((t) => out.push(t))
+  for (const c of chunks) filter.push(c)
+  filter.flush()
+  ok('streams only the prose, suppresses a split DSML opener', out.join('') === 'Writing the briefing.\n', JSON.stringify(out.join('')))
+  ok('filter marks itself stopped after the DSML marker', filter.stopped)
+
+  // a DSML-flavored partial prefix is held back, not emitted. `<｜｜DSML` (7 chars) is a
+  // prefix of the opener `<｜｜DSML｜｜tool_calls`; `<｜｜D` (4 chars) is a shorter prefix.
+  ok('partialMarkerTail holds a split DSML opener prefix', partialMarkerTail('foo <｜｜DSML') === 7)
+  ok('partialMarkerTail holds the longest across dialects', partialMarkerTail('foo <｜｜D') === 4)
+}
+
 console.log(`\n\x1b[1mResults: \x1b[32m${pass} passed\x1b[0m, ${fail ? `\x1b[31m${fail} failed\x1b[0m` : '0 failed'}`)
 process.exit(fail ? 1 : 0)
